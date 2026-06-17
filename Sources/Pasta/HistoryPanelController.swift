@@ -20,6 +20,7 @@ final class ClipCardView: NSView {
     private let bodyImage = NSImageView()
     private let srcLabel = NSTextField(labelWithString: "")     // 底部左：来源 App
     private let countLabel = NSTextField(labelWithString: "")   // 底部右：字符数/尺寸
+    private let topHi = NSView()                                // 顶部内高光（机械质感）
     private let blue = NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 1)   // #18c3f4
     private let shortFont = NSFont.systemFont(ofSize: 14.5, weight: .medium)        // 短内容：大而醒目、居中
     private let longFont = NSFont.systemFont(ofSize: 12.5)                          // 长内容：常规、顶对齐
@@ -69,7 +70,10 @@ final class ClipCardView: NSView {
         srcLabel.font = .systemFont(ofSize: 10.5)
         srcLabel.lineBreakMode = .byTruncatingTail
 
-        for v in [metaLabel, badge, pinView, headerLine, footerLine, bodyText, bodyImage, srcLabel, countLabel] {
+        topHi.wantsLayer = true
+        topHi.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.13).cgColor
+
+        for v in [metaLabel, badge, pinView, headerLine, footerLine, bodyText, bodyImage, srcLabel, countLabel, topHi] {
             addSubview(v)
         }
     }
@@ -78,7 +82,7 @@ final class ClipCardView: NSView {
 
     func configure(_ item: ClipItem) {
         isImage = item.kind == .image
-        dark = item.prefersDarkCard
+        dark = true        // 统一亮卡：不再跟随来源深浅（重度 IDE 用户几乎全是深色源）
         countLabel.stringValue = item.footerInfo
         srcLabel.stringValue = item.sourceAppName ?? ""
         pinView.isHidden = !item.pinned
@@ -146,8 +150,10 @@ final class ClipCardView: NSView {
         let cardBG: NSColor
         let border: NSColor
         if dark {
-            cardBG = hot ? NSColor(white: 0.17, alpha: 1.0) : NSColor(white: 0.12, alpha: 1.0)
-            border = selected ? selBorder : NSColor.white.withAlphaComponent(hot ? 0.16 : 0.09)
+            // 提亮卡片：冷调炭灰 #2e3138，从深底里浮出来
+            cardBG = hot ? NSColor(srgbRed: 0.235, green: 0.25, blue: 0.285, alpha: 1)
+                         : NSColor(srgbRed: 0.18, green: 0.192, blue: 0.22, alpha: 1)
+            border = selected ? selBorder : NSColor.white.withAlphaComponent(hot ? 0.18 : 0.10)
         } else {
             cardBG = hot ? NSColor(white: 1.0, alpha: 1.0) : NSColor(white: 0.965, alpha: 1.0)
             border = selected ? selBorder : NSColor.black.withAlphaComponent(hot ? 0.10 : 0.05)
@@ -160,9 +166,9 @@ final class ClipCardView: NSView {
         } else if selected {                           // 选中但非聚焦：中性浮起
             shColor = NSColor.black.cgColor; shOpacity = 0.4; shRadius = 12; shOffset = CGSize(width: 0, height: -3)
         } else if hovering {                           // 略强黑影
-            shColor = NSColor.black.cgColor; shOpacity = 0.36; shRadius = 11; shOffset = CGSize(width: 0, height: -4)
-        } else {                                       // 极淡黑影
-            shColor = NSColor.black.cgColor; shOpacity = 0.28; shRadius = 7; shOffset = CGSize(width: 0, height: -3)
+            shColor = NSColor.black.cgColor; shOpacity = 0.42; shRadius = 13; shOffset = CGSize(width: 0, height: -5)
+        } else {                                       // 浮起黑影（让卡片从深底弹出）
+            shColor = NSColor.black.cgColor; shOpacity = 0.36; shRadius = 10; shOffset = CGSize(width: 0, height: -4)
         }
 
         animate("backgroundColor", cardBG.cgColor, animated)
@@ -219,6 +225,8 @@ final class ClipCardView: NSView {
     override func layout() {
         super.layout()
         let w = bounds.width, h = bounds.height
+        // 顶部内高光（横跨上沿，避开圆角）
+        topHi.frame = NSRect(x: 8, y: h - 1, width: w - 16, height: 1)
         // 表头：meta + 右侧徽标
         badge.frame = NSRect(x: w - 13 - 22, y: h - 32, width: 22, height: 22)
         metaLabel.frame = NSRect(x: 13, y: h - 28, width: w - 13 - 30 - 8, height: 15)
@@ -338,18 +346,34 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         blur.autoresizingMask = [.width, .height]
         panel.contentView = blur
 
-        // 真磨砂玻璃：只叠一层很淡的深色，让 .hudWindow 毛玻璃透出桌面色（不再死黑）
+        // 提亮磨砂：更淡更透的冷调 tint，让毛玻璃通透不沉闷
         let tint = NSView()
         tint.wantsLayer = true
-        tint.layer?.backgroundColor = NSColor(white: 0.13, alpha: 0.42).cgColor
+        tint.layer?.backgroundColor = NSColor(srgbRed: 0.149, green: 0.169, blue: 0.212, alpha: 0.40).cgColor
         tint.frame = blur.bounds
         tint.autoresizingMask = [.width, .height]
         blur.addSubview(tint)
 
-        // 顶部一道微光，勾出磨砂面板的上边缘
+        // 顶部品牌色微光（青）：破掉全黑、注入一点生气
+        let brandGlow = NSView()
+        brandGlow.wantsLayer = true
+        brandGlow.frame = NSRect(x: 0, y: shelfHeight - 96, width: blur.bounds.width, height: 96)
+        brandGlow.autoresizingMask = [.width, .minYMargin]
+        let glowLayer = CAGradientLayer()
+        glowLayer.colors = [
+            NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 0.14).cgColor,
+            NSColor.clear.cgColor,
+        ]
+        glowLayer.startPoint = CGPoint(x: 0.5, y: 1.0)   // 顶部青 → 向下渐隐
+        glowLayer.endPoint = CGPoint(x: 0.5, y: 0.0)
+        glowLayer.frame = CGRect(x: 0, y: 0, width: 6000, height: 96)   // 超宽，覆盖任意屏宽
+        brandGlow.layer?.addSublayer(glowLayer)
+        blur.addSubview(brandGlow)
+
+        // 顶部一道白微光，勾出磨砂面板的上边缘
         let topHighlight = NSView()
         topHighlight.wantsLayer = true
-        topHighlight.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        topHighlight.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
         topHighlight.frame = NSRect(x: 0, y: shelfHeight - 1, width: blur.bounds.width, height: 1)
         topHighlight.autoresizingMask = [.width, .minYMargin]
         blur.addSubview(topHighlight)

@@ -49,10 +49,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 菜单栏
 
+    /// 自绘的菜单栏单色模板图标：精修剪贴板（板面 + 夹子 + 两行）。
+    private static func makeMenuBarIcon() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let img = NSImage(size: size, flipped: true) { _ in
+            let s: CGFloat = 18.0 / 28.0            // 设计 viewBox 28 → 18pt
+            func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: x * s, y: y * s) }
+            let lw: CGFloat = 1.5 * s               // 超细精准线条
+            NSColor.black.setStroke()
+
+            let board = NSBezierPath(roundedRect: NSRect(x: 6.5 * s, y: 5.5 * s, width: 15 * s, height: 18 * s),
+                                     xRadius: 3 * s, yRadius: 3 * s)
+            board.lineWidth = lw; board.lineJoinStyle = .round; board.stroke()
+
+            let clip = NSBezierPath(roundedRect: NSRect(x: 10.7 * s, y: 3.5 * s, width: 6.6 * s, height: 4.6 * s),
+                                    xRadius: 2.1 * s, yRadius: 2.1 * s)
+            clip.lineWidth = lw; clip.lineJoinStyle = .round; clip.stroke()
+
+            for (x2, y) in [(17.8, 13.0), (15.4, 17.0)] {
+                let line = NSBezierPath()
+                line.move(to: pt(10.2, y)); line.line(to: pt(x2, y))
+                line.lineWidth = lw; line.lineCapStyle = .round; line.stroke()
+            }
+            return true
+        }
+        img.isTemplate = true
+        return img
+    }
+
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "Pasta")
+            button.image = Self.makeMenuBarIcon()
             button.toolTip = "Pasta — 剪贴板历史"
         }
 
