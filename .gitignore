@@ -1,0 +1,7 @@
+.build/
+Pasta.app/
+dist/
+*.xcodeproj
+.DS_Store
+.swiftpm/
+.idea/

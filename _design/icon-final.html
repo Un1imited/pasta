@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+ *{margin:0;padding:0;box-sizing:border-box;}
+ html,body{width:1024px;height:1024px;background:transparent;overflow:hidden;}
+ .canvas{width:1024px;height:1024px;position:relative;}
+ /* macOS 图标网格：圆角矩形 824×824，居中留 100 边距 */
+ .squircle{position:absolute;left:100px;top:96px;width:824px;height:824px;border-radius:185px;
+   background:linear-gradient(150deg,#2ad0f8 0%,#0a84ff 100%);
+   box-shadow:0 22px 50px rgba(0,40,90,0.35),inset 0 3px 0 rgba(255,255,255,0.25),inset 0 -10px 30px rgba(0,40,90,0.18);}
+ /* 剪贴板板面 */
+ .board{position:absolute;left:50%;top:300px;transform:translateX(-50%);width:452px;height:520px;
+   background:#fff;border-radius:74px;box-shadow:0 26px 50px rgba(0,40,90,0.28);}
+ /* 顶部夹子 */
+ .clip{position:absolute;left:50%;top:236px;transform:translateX(-50%);width:206px;height:118px;border-radius:34px;
+   background:#eef3f7;box-shadow:inset 0 0 0 22px #c6d2dc;}
+ /* 内容行 */
+ .lines{position:absolute;left:50%;top:452px;transform:translateX(-50%);width:300px;}
+ .lines i{display:block;height:40px;border-radius:20px;margin-bottom:40px;}
+ .lines i:nth-child(1){width:268px;background:#16a9e2;}
+ .lines i:nth-child(2){width:300px;background:#aebecb;}
+ .lines i:nth-child(3){width:214px;background:#aebecb;}
+</style></head><body>
+ <div class="canvas">
+   <div class="squircle"></div>
+   <div class="board"></div>
+   <div class="clip"></div>
+   <div class="lines"><i></i><i></i><i></i></div>
+ </div>
+</body></html>
