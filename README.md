@@ -29,7 +29,7 @@
 需要 macOS 命令行工具（`xcode-select --install`）。本地构建出来的 App 不会被 Gatekeeper 拦。
 
 ```bash
-git clone https://github.com/<你的用户名>/pasta.git
+git clone https://github.com/Un1imited/pasta.git
 cd pasta
 ./build.sh        # 编译并打包成 Pasta.app
 open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
@@ -39,7 +39,7 @@ open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
 
 ### 方式二 · 下载预编译版
 
-从 [Releases](https://github.com/<你的用户名>/pasta/releases) 下载 `Pasta-x.y.z.zip`，解压拖到 `/Applications`。
+从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-x.y.z.zip`，解压拖到 `/Applications`。
 
 > 预编译版是 **Apple Silicon（arm64）**。Intel Mac 请走「方式一 · 从源码构建」。
 
