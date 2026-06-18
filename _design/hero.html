@@ -1,79 +1,86 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><style>
  *{margin:0;padding:0;box-sizing:border-box;}
- :root{--font:-apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;--sel:#18c3f4;}
+ :root{--font:-apple-system,"SF Pro Text","SF Pro Display","PingFang SC",system-ui,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace;--sel:#18c3f4;}
  html,body{width:1600px;height:380px;overflow:hidden;}
- body{font-family:var(--font);
-   background:
-     radial-gradient(70% 80% at 14% 10%, #c98a5a 0%, transparent 42%),
-     radial-gradient(60% 80% at 88% 6%, #5a6fd0 0%, transparent 40%),
-     radial-gradient(80% 90% at 70% 100%, #239b92 0%, transparent 46%),
-     linear-gradient(160deg,#39414f,#20232e);}
+ body{font-family:var(--font);background:#0c0f14;position:relative;}
+ /* 桌面色：让磨砂透出一点品牌青/翠/暖 */
+ .orb{position:absolute;border-radius:50%;filter:blur(90px);}
+ .o1{width:520px;height:520px;left:-40px;top:-170px;background:#1aa0c8;opacity:0.5;}
+ .o2{width:480px;height:480px;right:6%;top:-150px;background:#22b083;opacity:0.42;}
+ .o3{width:560px;height:420px;left:46%;bottom:-250px;background:#d79a3a;opacity:0.3;}
+
  .shelf{position:absolute;left:0;right:0;bottom:0;height:332px;display:flex;flex-direction:column;
-   background:rgba(28,28,32,0.46);-webkit-backdrop-filter:blur(60px) saturate(165%);backdrop-filter:blur(60px) saturate(165%);
-   border-top:0.5px solid rgba(255,255,255,0.14);box-shadow:0 -22px 60px rgba(0,0,0,0.45);}
- .shelf::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:rgba(255,255,255,0.12);}
- .toolbar{height:46px;display:flex;align-items:center;gap:12px;padding:0 20px;border-bottom:0.5px solid rgba(255,255,255,0.08);}
- .mag{width:15px;height:15px;color:rgba(255,255,255,0.5);}
- .ph{font-size:13.5px;color:rgba(255,255,255,0.34);}
- .seg{display:flex;background:rgba(255,255,255,0.08);border-radius:8px;padding:2px;margin-left:4px;}
- .seg span{font-size:12.5px;color:rgba(255,255,255,0.55);padding:4px 12px;border-radius:6px;}
- .seg span.on{color:#fff;background:rgba(255,255,255,0.18);font-weight:500;}
- .grow{flex:1;}.count{font-size:12px;color:rgba(255,255,255,0.4);}
- .strip{flex:1;display:flex;gap:14px;padding:18px 20px;overflow:hidden;}
- .card{flex:0 0 200px;width:200px;border-radius:13px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 6px 16px rgba(0,0,0,0.3);}
- .card.dark{background:#1e1e20;color:#fff;border:0.5px solid rgba(255,255,255,0.09);}
- .card.light{background:#f6f6f7;color:#1c1c1e;border:0.5px solid rgba(0,0,0,0.05);}
- .card.sel{box-shadow:0 0 0 2px var(--sel),0 10px 24px rgba(0,0,0,0.42),0 0 22px rgba(24,195,244,0.22);}
+   background:rgba(38,43,54,0.42);-webkit-backdrop-filter:blur(52px) saturate(185%);backdrop-filter:blur(52px) saturate(185%);
+   box-shadow:inset 0 1px 0 rgba(255,255,255,0.16),0 -28px 70px rgba(0,0,0,0.5);}
+ .shelf::before{content:"";position:absolute;left:0;right:0;top:0;height:96px;
+   background:linear-gradient(180deg,rgba(24,195,244,0.14),transparent);pointer-events:none;}
+ .shelf::after{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+   background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent);}
+
+ .toolbar{height:46px;display:flex;align-items:center;gap:13px;padding:0 22px;position:relative;z-index:2;}
+ .mag{width:15px;height:15px;color:rgba(255,255,255,0.55);}
+ .ph{font-size:13.5px;color:rgba(255,255,255,0.4);}
+ .seg{display:flex;background:rgba(255,255,255,0.1);border-radius:8px;padding:2px;margin-left:4px;}
+ .seg span{font-size:12.5px;color:rgba(255,255,255,0.6);padding:4px 12px;border-radius:6px;}
+ .seg span.on{color:#fff;background:rgba(255,255,255,0.2);box-shadow:inset 0 1px 0 rgba(255,255,255,0.16);font-weight:500;}
+ .grow{flex:1;}.count{font-size:11px;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.16em;}
+
+ .strip{flex:1;display:flex;gap:14px;padding:16px 22px;overflow:hidden;position:relative;z-index:2;}
+
+ /* 统一提亮卡片 */
+ .card{flex:0 0 200px;width:200px;border-radius:13px;display:flex;flex-direction:column;overflow:hidden;
+   background:#2e3138;box-shadow:inset 0 1px 0 rgba(255,255,255,0.13),0 9px 22px rgba(0,0,0,0.4);color:#fff;}
+ .card.sel{box-shadow:inset 0 1px 0 rgba(255,255,255,0.13),0 0 0 2px var(--sel),0 0 26px rgba(24,195,244,0.3);}
+
  .head{display:flex;align-items:center;gap:8px;padding:11px 13px 0;}
- .head .meta{flex:1;min-width:0;font-size:11px;}
- .dark .meta{color:rgba(255,255,255,0.42);}.light .meta{color:rgba(0,0,0,0.42);}
- .meta .kind{color:var(--sel);font-weight:600;}
- .badge{width:21px;height:21px;border-radius:6px;flex:0 0 auto;box-shadow:0 1px 2px rgba(0,0,0,0.22);}
+ .head .meta{flex:1;min-width:0;display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,0.46);}
+ .kind{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;padding:2px 6px;border-radius:5px;background:rgba(24,195,244,0.18);color:#7fdcff;}
+ .badge{width:21px;height:21px;border-radius:6px;flex:0 0 auto;box-shadow:0 1px 2px rgba(0,0,0,0.3),inset 0 0 0 0.5px rgba(255,255,255,0.12);}
  .badge.pc{background:conic-gradient(from 210deg,#21d4fd,#21f3a0,#ffce00,#ff5ca0,#21d4fd);}
  .badge.term{background:#0c0c0c;}.badge.chrome{background:conic-gradient(#ea4335 0 33%,#34a853 0 66%,#fbbc05 0 100%);}
  .badge.note{background:linear-gradient(135deg,#ffd34a,#ff9f0a);}
- .body{flex:1;display:flex;padding:8px 13px;overflow:hidden;}
+
+ .body{flex:1;display:flex;padding:9px 13px;overflow:hidden;}
  .body.short{align-items:center;}.body.long{align-items:flex-start;}
- .txt{font-size:13px;line-height:1.5;word-break:break-word;width:100%;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
- .body.short .txt{font-size:14.5px;font-weight:500;}
- .dark .txt{color:rgba(255,255,255,0.9);}.light .txt{color:rgba(0,0,0,0.86);}
+ .txt{font-size:13px;line-height:1.5;width:100%;word-break:break-word;color:rgba(255,255,255,0.94);display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;}
+ .body.short .txt{font-size:15px;font-weight:500;letter-spacing:-0.01em;}
  .txt.mono{font-family:var(--mono);font-size:12px;}.body.short .txt.mono{font-size:13.5px;}
- .link{color:#5aa0ff;}.light .link{color:#3478f6;}
- .imgwrap{width:100%;height:100%;border-radius:7px;overflow:hidden;position:relative;
-   background:linear-gradient(135deg,#4a5a8a,#2b6c7e);}
- .imgwrap::after{content:"";position:absolute;left:14px;right:14px;bottom:12px;top:40px;border-radius:4px;
-   background:repeating-linear-gradient(180deg,rgba(255,255,255,0.16) 0 3px,transparent 3px 12px);}
- .imgwrap::before{content:"";position:absolute;left:14px;top:14px;width:46%;height:9px;border-radius:4px;background:rgba(255,255,255,0.4);}
- .foot{display:flex;align-items:center;justify-content:space-between;padding:9px 13px 11px;}
- .foot .src{font-size:10.5px;}.dark .src{color:rgba(255,255,255,0.5);}.light .src{color:rgba(0,0,0,0.5);}
- .foot .cnt{font-size:10px;}.dark .cnt{color:rgba(255,255,255,0.32);}.light .cnt{color:rgba(0,0,0,0.32);}
+ .link{color:#6cb6ff;}
+ .imgwrap{width:100%;height:100%;border-radius:8px;overflow:hidden;position:relative;background:linear-gradient(135deg,#3a4d80,#236272);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.1);}
+ .imgwrap::before{content:"";position:absolute;left:14px;top:14px;width:44%;height:9px;border-radius:5px;background:rgba(255,255,255,0.42);}
+ .imgwrap::after{content:"";position:absolute;left:14px;right:14px;top:38px;bottom:12px;border-radius:5px;background:repeating-linear-gradient(180deg,rgba(255,255,255,0.16) 0 3px,transparent 3px 12px);}
+
+ .foot{display:flex;align-items:center;justify-content:space-between;padding:0 13px 12px;font-variant-numeric:tabular-nums;}
+ .src{font-size:10px;color:rgba(255,255,255,0.5);}
+ .cnt{font-size:9.5px;color:rgba(255,255,255,0.32);text-transform:uppercase;letter-spacing:0.1em;}
 </style></head><body>
+ <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
  <div class="shelf">
    <div class="toolbar">
-     <svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+     <svg class="mag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
      <span class="ph">搜索剪贴历史…</span>
      <span class="seg"><span class="on">剪贴板</span><span>置顶</span></span>
-     <span class="grow"></span><span class="count">42 条</span>
+     <span class="grow"></span><span class="count">42 items</span>
    </div>
    <div class="strip" id="strip"></div>
  </div>
 <script>
 const cards=[
- {tone:'dark',sel:1,kind:'链接',time:'刚刚',badge:'chrome',long:1,link:1,txt:'github.com/Un1imited/pasta',src:'Chrome',cnt:'27'},
- {tone:'dark',time:'2 分钟前',badge:'term',mono:1,txt:'./build.sh',src:'终端',cnt:'10'},
- {tone:'dark',time:'5 分钟前',badge:'pc',mono:1,txt:'func paste(_ item: ClipItem)',src:'Xcode',cnt:'28'},
- {tone:'dark',kind:'图片',time:'8 分钟前',badge:'pc',img:1,src:'Xcode',cnt:'1280×720'},
- {tone:'light',time:'12 分钟前',txt:'Hello, world! 👋',src:'备忘录',badge:'note',cnt:'14'},
- {tone:'light',kind:'邮箱',time:'20 分钟前',txt:'hi@example.com',src:'邮件',badge:'note',cnt:'14'},
- {tone:'dark',time:'1 小时前',mono:1,long:1,txt:'SELECT id, name FROM users WHERE created_at > now() - interval 7 day ORDER BY id DESC',src:'终端',badge:'term',cnt:'86'},
- {tone:'light',time:'昨天',txt:'设计评审周四下午 3 点，记得带稿子',src:'备忘录',badge:'note',cnt:'18'},
+ {sel:1,kind:'链接',time:'刚刚',badge:'chrome',long:1,link:1,txt:'github.com/Un1imited/pasta',src:'Chrome',cnt:'27'},
+ {time:'2 分钟前',badge:'term',mono:1,txt:'./build.sh',src:'终端',cnt:'10'},
+ {time:'5 分钟前',badge:'pc',mono:1,txt:'func paste(_ item: ClipItem)',src:'Xcode',cnt:'28'},
+ {kind:'图片',time:'8 分钟前',badge:'pc',img:1,src:'Xcode',cnt:'1280×720'},
+ {time:'12 分钟前',badge:'note',txt:'Hello, world! 👋',src:'备忘录',cnt:'14'},
+ {kind:'邮箱',time:'20 分钟前',badge:'note',txt:'hi@example.com',src:'邮件',cnt:'14'},
+ {time:'1 小时前',badge:'term',mono:1,long:1,txt:'SELECT id, name FROM users WHERE created_at > now() - interval 7 day ORDER BY id DESC',src:'终端',cnt:'86'},
+ {time:'昨天',badge:'note',txt:'设计评审周四下午 3 点，记得带稿子',src:'备忘录',cnt:'18'},
 ];
 document.getElementById('strip').innerHTML=cards.map(c=>{
- const meta=c.kind?`<span class="kind">${c.kind}</span> · ${c.time}`:c.time;
- const body=c.img?'<div class="body short" style="padding:8px"><div class="imgwrap"></div></div>'
+ const meta=`${c.kind?`<span class="kind">${c.kind}</span>`:''}<span>${c.time}</span>`;
+ const body=c.img?'<div class="body short"><div class="imgwrap"></div></div>'
    :`<div class="body ${c.long?'long':'short'}"><div class="txt ${c.mono?'mono':''} ${c.link?'link':''}">${c.txt}</div></div>`;
- return `<div class="card ${c.tone} ${c.sel?'sel':''}"><div class="head"><span class="meta">${meta}</span><span class="badge ${c.badge}"></span></div>${body}<div class="foot"><span class="src">${c.src}</span><span class="cnt">${c.cnt} 字符</span></div></div>`;
+ return `<div class="card ${c.sel?'sel':''}"><div class="head"><span class="meta">${meta}</span><span class="badge ${c.badge}"></span></div>${body}<div class="foot"><span class="src">${c.src}</span><span class="cnt">${c.cnt} chars</span></div></div>`;
 }).join('');
 </script>
 </body></html>
