@@ -7,6 +7,7 @@ final class Settings {
 
     static let hotKeyChanged = Notification.Name("Pasta.hotKeyChanged")
     static let expirationChanged = Notification.Name("Pasta.expirationChanged")
+    static let themeChanged = Notification.Name("Pasta.themeChanged")
 
     private let defaults = UserDefaults.standard
 
@@ -16,6 +17,7 @@ final class Settings {
         static let hotKeyDisplay = "hotKeyDisplay"
         static let plainTextPaste = "plainTextPaste"
         static let expirationDays = "expirationDays"
+        static let themeID = "themeID"
     }
 
     private init() {
@@ -25,8 +27,20 @@ final class Settings {
             K.hotKeyDisplay: "⇧⌘V",
             K.plainTextPaste: false,
             K.expirationDays: 180,          // 默认 6 个月（不支持永久）
+            K.themeID: "midnight",
         ])
     }
+
+    // MARK: - 主题
+
+    var themeID: String {
+        get { defaults.string(forKey: K.themeID) ?? "midnight" }
+        set {
+            defaults.set(newValue, forKey: K.themeID)
+            NotificationCenter.default.post(name: Settings.themeChanged, object: nil)
+        }
+    }
+    var theme: Theme { Theme.by(id: themeID) }
 
     static let maxExpirationDays = 180      // 历史最长保留 6 个月
 
