@@ -19,9 +19,9 @@ final class ClipboardStore {
         purgeExpiredInternal()
     }
 
-    /// 置顶在前、其余按时间倒序，用于面板展示。
+    /// 按时间倒序（最近在前）用于面板展示。常用项不置顶到最前，仅在「常用」标签单独汇总。
     var displayItems: [ClipItem] {
-        items.filter { $0.pinned } + items.filter { !$0.pinned }
+        items
     }
 
     func add(_ newItem: ClipItem) {

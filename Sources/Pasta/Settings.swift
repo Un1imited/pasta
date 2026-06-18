@@ -24,9 +24,11 @@ final class Settings {
             K.hotKeyModifiers: Int(cmdKey | shiftKey),
             K.hotKeyDisplay: "⇧⌘V",
             K.plainTextPaste: false,
-            K.expirationDays: 0,            // 0 = 永不过期
+            K.expirationDays: 180,          // 默认 6 个月（不支持永久）
         ])
     }
+
+    static let maxExpirationDays = 180      // 历史最长保留 6 个月
 
     // MARK: - 热键
 
@@ -50,11 +52,15 @@ final class Settings {
 
     // MARK: - 过期清理
 
-    /// 非置顶历史保留天数，0 表示永不过期。
+    /// 非置顶历史保留天数（1…180，不支持永久）。旧的「永不(0)」或越界值自动夹到 6 个月。
     var expirationDays: Int {
-        get { defaults.integer(forKey: K.expirationDays) }
+        get {
+            let v = defaults.integer(forKey: K.expirationDays)
+            return (v <= 0 || v > Settings.maxExpirationDays) ? Settings.maxExpirationDays : v
+        }
         set {
-            defaults.set(newValue, forKey: K.expirationDays)
+            let v = min(max(1, newValue), Settings.maxExpirationDays)
+            defaults.set(v, forKey: K.expirationDays)
             NotificationCenter.default.post(name: Settings.expirationChanged, object: nil)
         }
     }

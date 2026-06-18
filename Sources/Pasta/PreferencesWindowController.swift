@@ -7,7 +7,7 @@ final class PreferencesWindowController: NSWindowController {
     private let expirationPopup = NSPopUpButton(frame: .zero, pullsDown: false)
 
     private let expirationOptions: [(title: String, days: Int)] = [
-        ("永不过期", 0), ("保留 1 天", 1), ("保留 7 天", 7), ("保留 30 天", 30),
+        ("保留 1 天", 1), ("保留 7 天", 7), ("保留 30 天", 30), ("保留 3 个月", 90), ("保留 6 个月", 180),
     ]
 
     init() {

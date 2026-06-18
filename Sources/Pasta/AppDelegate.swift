@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "偏好设置…", action: #selector(openPreferences), keyEquivalent: ",")
         menu.addItem(.separator())
 
-        menu.addItem(withTitle: "清空历史（保留置顶）", action: #selector(clearHistory), keyEquivalent: "")
+        menu.addItem(withTitle: "清空历史（保留常用）", action: #selector(clearHistory), keyEquivalent: "")
 
         launchItem = NSMenuItem(title: "开机自启", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         launchItem.state = LaunchAtLogin.isEnabled ? .on : .off

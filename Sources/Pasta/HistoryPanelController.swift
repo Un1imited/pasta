@@ -45,9 +45,9 @@ final class ClipCardView: NSView {
         metaLabel.font = .systemFont(ofSize: 11)
 
         badge.imageScaling = .scaleProportionallyUpOrDown
-        pinView.image = NSImage(systemSymbolName: "pin.fill", accessibilityDescription: nil)
+        pinView.image = NSImage(systemSymbolName: "star.fill", accessibilityDescription: nil)
         pinView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
-        pinView.contentTintColor = .systemOrange
+        pinView.contentTintColor = .systemYellow
 
         headerLine.boxType = .custom
         headerLine.borderWidth = 0
@@ -410,15 +410,15 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         countLabel.alignment = .right
         blur.addSubview(countLabel)
 
-        hintLabel = NSTextField(labelWithString: "↩ 粘贴 · ⌘P 置顶")
+        hintLabel = NSTextField(labelWithString: "↩ 粘贴 · ⌘P 常用")
         hintLabel.font = .systemFont(ofSize: 11)
         hintLabel.textColor = NSColor.white.withAlphaComponent(0.32)
         hintLabel.alignment = .right
         blur.addSubview(hintLabel)
 
-        // 剪贴板 / 置顶 标签页
+        // 剪贴板 / 常用 标签页
         // 原生分段控件（系统级选中样式）+ 外层容器（焦点蓝环）
-        tabControl = NSSegmentedControl(labels: ["剪贴板", "置顶"], trackingMode: .selectOne,
+        tabControl = NSSegmentedControl(labels: ["剪贴板", "常用"], trackingMode: .selectOne,
                                         target: self, action: #selector(tabClicked))
         tabControl.segmentStyle = .capsule
         tabControl.selectedSegment = 0
@@ -552,6 +552,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             guard let self else { return event }
             let cmd = event.modifierFlags.contains(.command)
             switch event.keyCode {
+            case 123 where cmd: self.selectTab(pinned: false); return nil  // ⌘← 剪贴板（全局）
+            case 124 where cmd: self.selectTab(pinned: true); return nil   // ⌘→ 置顶（全局）
             case 124:                                          // → 搜索→标签→(剪贴板→置顶)
                 switch self.focusZone {
                 case .cards: self.moveSelection(1)
@@ -644,7 +646,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         if !q.isEmpty {
             emptyLabel.stringValue = "无匹配结果"
         } else {
-            emptyLabel.stringValue = showPinnedOnly ? "暂无置顶 · 选中卡片按 ⌘P 置顶" : "暂无剪贴历史"
+            emptyLabel.stringValue = showPinnedOnly ? "暂无常用 · 选中卡片按 ⌘P 收藏" : "暂无剪贴历史"
         }
 
         rebuildCards()
