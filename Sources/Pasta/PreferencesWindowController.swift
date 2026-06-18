@@ -5,6 +5,7 @@ final class PreferencesWindowController: NSWindowController {
     private let recorder = HotKeyRecorderButton(frame: NSRect(x: 0, y: 0, width: 200, height: 28))
     private let plainCheck = NSButton(checkboxWithTitle: "粘贴为纯文本（去格式）", target: nil, action: nil)
     private let expirationPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let themePopup = NSPopUpButton(frame: .zero, pullsDown: false)
 
     private let expirationOptions: [(title: String, days: Int)] = [
         ("保留 1 天", 1), ("保留 7 天", 7), ("保留 30 天", 30), ("保留 3 个月", 90), ("保留 6 个月", 180),
@@ -12,7 +13,7 @@ final class PreferencesWindowController: NSWindowController {
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 210),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 250),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -42,17 +43,21 @@ final class PreferencesWindowController: NSWindowController {
             return l
         }
 
+        let rowTheme = NSStackView(views: [label("主题皮肤"), themePopup])
         let rowHotkey = NSStackView(views: [label("唤起快捷键"), recorder])
         let rowPlain = NSStackView(views: [label("粘贴方式"), plainCheck])
         let rowExpire = NSStackView(views: [label("历史保留"), expirationPopup])
 
+        for t in Theme.all { themePopup.addItem(withTitle: t.name) }
+        themePopup.target = self
+        themePopup.action = #selector(themeChanged)
         for option in expirationOptions { expirationPopup.addItem(withTitle: option.title) }
         expirationPopup.target = self
         expirationPopup.action = #selector(expirationChanged)
         plainCheck.target = self
         plainCheck.action = #selector(plainChanged)
 
-        for row in [rowHotkey, rowPlain, rowExpire] {
+        for row in [rowTheme, rowHotkey, rowPlain, rowExpire] {
             row.orientation = .horizontal
             row.spacing = 12
             row.alignment = .centerY
@@ -64,7 +69,7 @@ final class PreferencesWindowController: NSWindowController {
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .tertiaryLabelColor
 
-        let stack = NSStackView(views: [rowHotkey, rowPlain, rowExpire, hint])
+        let stack = NSStackView(views: [rowTheme, rowHotkey, rowPlain, rowExpire, hint])
         stack.orientation = .vertical
         stack.spacing = 16
         stack.alignment = .leading
@@ -84,6 +89,14 @@ final class PreferencesWindowController: NSWindowController {
         let days = Settings.shared.expirationDays
         let idx = expirationOptions.firstIndex { $0.days == days } ?? 0
         expirationPopup.selectItem(at: idx)
+        let tIdx = Theme.all.firstIndex { $0.id == Settings.shared.themeID } ?? 0
+        themePopup.selectItem(at: tIdx)
+    }
+
+    @objc private func themeChanged() {
+        let idx = themePopup.indexOfSelectedItem
+        guard Theme.all.indices.contains(idx) else { return }
+        Settings.shared.themeID = Theme.all[idx].id
     }
 
     @objc private func plainChanged() {

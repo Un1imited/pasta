@@ -21,11 +21,10 @@ final class ClipCardView: NSView {
     private let srcLabel = NSTextField(labelWithString: "")     // 底部左：来源 App
     private let countLabel = NSTextField(labelWithString: "")   // 底部右：字符数/尺寸
     private let topHi = NSView()                                // 顶部内高光（机械质感）
-    private let blue = NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 1)   // #18c3f4
     private let shortFont = NSFont.systemFont(ofSize: 14.5, weight: .medium)        // 短内容：大而醒目、居中
     private let longFont = NSFont.systemFont(ofSize: 12.5)                          // 长内容：常规、顶对齐
     private var isImage = false
-    private var dark = true
+    private var theme = Theme.current
     private var bodyShort = false
     private(set) var selected = false
     private var selFocused = true        // 卡片区是否为当前焦点区（false 时蓝框降级为灰框）
@@ -82,7 +81,7 @@ final class ClipCardView: NSView {
 
     func configure(_ item: ClipItem) {
         isImage = item.kind == .image
-        dark = true        // 统一亮卡：不再跟随来源深浅（重度 IDE 用户几乎全是深色源）
+        theme = Theme.current
         countLabel.stringValue = item.footerInfo
         srcLabel.stringValue = item.sourceAppName ?? ""
         pinView.isHidden = !item.pinned
@@ -109,31 +108,29 @@ final class ClipCardView: NSView {
         needsLayout = true
     }
 
-    /// 表头内容：纯文本 → 仅时间；链接/图片/文件/邮箱 → 「类型(蓝) · 时间」。
+    /// 表头内容：纯文本 → 仅时间；链接/图片/文件/邮箱 → 「类型(强调色) · 时间」。
     private func applyMeta(_ item: ClipItem) {
-        let dim = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.42)
         if item.showsKindInHeader {
             let s = NSMutableAttributedString()
             s.append(NSAttributedString(string: item.kindLabel,
-                attributes: [.foregroundColor: blue, .font: NSFont.systemFont(ofSize: 11, weight: .semibold)]))
+                attributes: [.foregroundColor: theme.accent, .font: NSFont.systemFont(ofSize: 11, weight: .semibold)]))
             s.append(NSAttributedString(string: " · \(item.relativeTime)",
-                attributes: [.foregroundColor: dim, .font: NSFont.systemFont(ofSize: 11)]))
+                attributes: [.foregroundColor: theme.cardDim, .font: NSFont.systemFont(ofSize: 11)]))
             metaLabel.attributedStringValue = s
         } else {
             metaLabel.stringValue = item.relativeTime
-            metaLabel.textColor = dim
+            metaLabel.textColor = theme.cardDim
         }
     }
 
-    /// 根据来源深浅设置卡片配色（深卡白字 / 米白卡黑字）。
+    /// 按当前主题设置卡片文字/分隔线/内高光。
     private func applyTone() {
-        let fg = dark ? NSColor.white : NSColor.black
-        bodyText.textColor = fg.withAlphaComponent(dark ? 0.90 : 0.86)
-        srcLabel.textColor = fg.withAlphaComponent(0.5)
-        countLabel.textColor = fg.withAlphaComponent(0.32)
-        let line = fg.withAlphaComponent(dark ? 0.07 : 0.06)
-        headerLine.fillColor = line
-        footerLine.fillColor = line
+        bodyText.textColor = theme.cardFG
+        srcLabel.textColor = theme.cardDim
+        countLabel.textColor = theme.cardFaint
+        headerLine.fillColor = theme.cardBorder
+        footerLine.fillColor = theme.cardBorder
+        topHi.layer?.backgroundColor = theme.cardInsetHi.cgColor
     }
 
     func setSelected(_ on: Bool, focused: Bool = true) {
@@ -145,30 +142,20 @@ final class ClipCardView: NSView {
     /// 计算并应用卡片当前状态（选中 / hover / 普通），animated 时做 0.14s 平滑过渡。
     private func applyState(animated: Bool) {
         let hot = hovering && !selected
-        let selBorder = selFocused ? blue : (dark ? NSColor.white.withAlphaComponent(0.5) : NSColor.black.withAlphaComponent(0.4))
-        // 米白卡 #f6f6f7（hover 提亮到纯白）/ 深卡 #1e1e20（hover 提亮）
-        let cardBG: NSColor
-        let border: NSColor
-        if dark {
-            // 提亮卡片：冷调炭灰 #2e3138，从深底里浮出来
-            cardBG = hot ? NSColor(srgbRed: 0.235, green: 0.25, blue: 0.285, alpha: 1)
-                         : NSColor(srgbRed: 0.18, green: 0.192, blue: 0.22, alpha: 1)
-            border = selected ? selBorder : NSColor.white.withAlphaComponent(hot ? 0.18 : 0.10)
-        } else {
-            cardBG = hot ? NSColor(white: 1.0, alpha: 1.0) : NSColor(white: 0.965, alpha: 1.0)
-            border = selected ? selBorder : NSColor.black.withAlphaComponent(hot ? 0.10 : 0.05)
-        }
+        let selBorder = selFocused ? theme.accent : theme.cardDim
+        let cardBG = hot ? theme.cardHoverBG : theme.cardBG
+        let border = selected ? selBorder : theme.cardBorder
         let borderW: CGFloat = selected ? 2 : 1
 
         let shColor: CGColor, shOpacity: Float, shRadius: CGFloat, shOffset: CGSize
-        if selected && selFocused {                    // 蓝色微光浮起（卡片区聚焦）
-            shColor = blue.cgColor; shOpacity = 0.55; shRadius = 15; shOffset = CGSize(width: 0, height: -2)
+        if selected && selFocused {                    // 强调色微光浮起（卡片区聚焦）
+            shColor = theme.accent.cgColor; shOpacity = 0.55; shRadius = 15; shOffset = CGSize(width: 0, height: -2)
         } else if selected {                           // 选中但非聚焦：中性浮起
-            shColor = NSColor.black.cgColor; shOpacity = 0.4; shRadius = 12; shOffset = CGSize(width: 0, height: -3)
-        } else if hovering {                           // 略强黑影
-            shColor = NSColor.black.cgColor; shOpacity = 0.42; shRadius = 13; shOffset = CGSize(width: 0, height: -5)
-        } else {                                       // 浮起黑影（让卡片从深底弹出）
-            shColor = NSColor.black.cgColor; shOpacity = 0.36; shRadius = 10; shOffset = CGSize(width: 0, height: -4)
+            shColor = theme.cardShadow.cgColor; shOpacity = theme.cardShadowHover; shRadius = 12; shOffset = CGSize(width: 0, height: -3)
+        } else if hovering {                           // hover 略强投影
+            shColor = theme.cardShadow.cgColor; shOpacity = theme.cardShadowHover; shRadius = 13; shOffset = CGSize(width: 0, height: -5)
+        } else {                                       // 浮起投影
+            shColor = theme.cardShadow.cgColor; shOpacity = theme.cardShadowNormal; shRadius = 10; shOffset = CGSize(width: 0, height: -4)
         }
 
         animate("backgroundColor", cardBG.cgColor, animated)
@@ -284,6 +271,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     private var panel: KeyablePanel!
     private var blur: NSVisualEffectView!
+    private var tint: NSView!
+    private var brandGlow: NSView!
+    private var glowLayer: CAGradientLayer!
+    private var topHighlight: NSView!
     private var searchField: NSTextField!
     private var magnifier: NSImageView!
     private var countLabel: NSTextField!
@@ -300,7 +291,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private enum Focus { case search, tabs, cards }
     private var focusZone: Focus = .cards
     private var searchContainer: NSView!
-    private let accentBlue = NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 1)   // #18c3f4
+    private var theme: Theme = .midnight
 
     private var filtered: [ClipItem] = []
     private var cardViews: [ClipCardView] = []
@@ -318,6 +309,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             DispatchQueue.main.async { self?.refilterIfVisible() }
         }
         buildPanel()
+        NotificationCenter.default.addObserver(forName: Settings.themeChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.applyTheme()
+            self?.refilterIfVisible()     // 重建卡片以套用新主题色
+        }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -336,44 +331,35 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
-        panel.appearance = NSAppearance(named: .darkAqua)
-
         blur = NSVisualEffectView()
-        blur.material = .hudWindow
         blur.blendingMode = .behindWindow
         blur.state = .active
         blur.wantsLayer = true
         blur.autoresizingMask = [.width, .height]
         panel.contentView = blur
 
-        // 提亮磨砂：更淡更透的冷调 tint，让毛玻璃通透不沉闷
-        let tint = NSView()
+        // 磨砂上叠的色（主题驱动）
+        tint = NSView()
         tint.wantsLayer = true
-        tint.layer?.backgroundColor = NSColor(srgbRed: 0.149, green: 0.169, blue: 0.212, alpha: 0.40).cgColor
         tint.frame = blur.bounds
         tint.autoresizingMask = [.width, .height]
         blur.addSubview(tint)
 
-        // 顶部品牌色微光（青）：破掉全黑、注入一点生气
-        let brandGlow = NSView()
+        // 顶部品牌色微光（主题驱动）
+        brandGlow = NSView()
         brandGlow.wantsLayer = true
         brandGlow.frame = NSRect(x: 0, y: shelfHeight - 96, width: blur.bounds.width, height: 96)
         brandGlow.autoresizingMask = [.width, .minYMargin]
-        let glowLayer = CAGradientLayer()
-        glowLayer.colors = [
-            NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 0.14).cgColor,
-            NSColor.clear.cgColor,
-        ]
-        glowLayer.startPoint = CGPoint(x: 0.5, y: 1.0)   // 顶部青 → 向下渐隐
+        glowLayer = CAGradientLayer()
+        glowLayer.startPoint = CGPoint(x: 0.5, y: 1.0)   // 顶部 → 向下渐隐
         glowLayer.endPoint = CGPoint(x: 0.5, y: 0.0)
         glowLayer.frame = CGRect(x: 0, y: 0, width: 6000, height: 96)   // 超宽，覆盖任意屏宽
         brandGlow.layer?.addSublayer(glowLayer)
         blur.addSubview(brandGlow)
 
-        // 顶部一道白微光，勾出磨砂面板的上边缘
-        let topHighlight = NSView()
+        // 上沿微光（主题驱动）
+        topHighlight = NSView()
         topHighlight.wantsLayer = true
-        topHighlight.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.16).cgColor
         topHighlight.frame = NSRect(x: 0, y: shelfHeight - 1, width: blur.bounds.width, height: 1)
         topHighlight.autoresizingMask = [.width, .minYMargin]
         blur.addSubview(topHighlight)
@@ -455,9 +441,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         emptyLabel = NSTextField(labelWithString: "")
         emptyLabel.alignment = .center
         emptyLabel.font = .systemFont(ofSize: 14)
-        emptyLabel.textColor = NSColor.white.withAlphaComponent(0.4)
         emptyLabel.isHidden = true
         blur.addSubview(emptyLabel)
+
+        applyTheme()
     }
 
     private func layoutShelf(width W: CGFloat) {
@@ -479,23 +466,40 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         tabControl.selectedSegment = showPinnedOnly ? 1 : 0
     }
 
-    /// 焦点区视觉：聚焦的区域加蓝环 + 蓝色辉光；卡片区聚焦 → 选中卡蓝框。
+    /// 焦点区视觉：聚焦的区域加强调色环 + 辉光；卡片区聚焦 → 选中卡强调框。
     private func updateFocusVisuals() {
         focusRing(searchContainer, focusZone == .search)
         focusRing(tabContainer, focusZone == .tabs)
-        magnifier.contentTintColor = focusZone == .search
-            ? accentBlue : NSColor.white.withAlphaComponent(0.45)
+        magnifier.contentTintColor = focusZone == .search ? theme.accent : theme.secondaryText
         if cardViews.indices.contains(selectedIndex) {
             cardViews[selectedIndex].setSelected(true, focused: focusZone == .cards)
         }
     }
 
     private func focusRing(_ view: NSView, _ on: Bool) {
-        view.layer?.borderColor = (on ? accentBlue : NSColor.clear).cgColor
-        view.layer?.shadowColor = accentBlue.cgColor
+        view.layer?.borderColor = (on ? theme.accent : NSColor.clear).cgColor
+        view.layer?.shadowColor = theme.accent.cgColor
         view.layer?.shadowOpacity = on ? 0.55 : 0
         view.layer?.shadowRadius = 8
         view.layer?.shadowOffset = .zero
+    }
+
+    /// 应用当前主题：设置面板 chrome 的所有色值 + 同步给卡片。
+    func applyTheme() {
+        theme = Settings.shared.theme
+        Theme.current = theme
+        panel.appearance = NSAppearance(named: theme.appearance)
+        blur.material = theme.blurMaterial
+        tint.layer?.backgroundColor = theme.shelfTint.cgColor
+        topHighlight.layer?.backgroundColor = theme.topEdge.cgColor
+        glowLayer.colors = [theme.glow.cgColor, NSColor.clear.cgColor]
+        divider.fillColor = theme.cardBorder
+        magnifier.contentTintColor = theme.secondaryText
+        searchField.textColor = theme.primaryText
+        searchField.placeholderString = "搜索剪贴历史…"
+        countLabel.textColor = theme.secondaryText
+        hintLabel.textColor = theme.secondaryText.withAlphaComponent(theme.secondaryText.alphaComponent * 0.8)
+        emptyLabel.textColor = theme.secondaryText
     }
 
     private func setZone(_ z: Focus) {
