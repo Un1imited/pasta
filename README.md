@@ -45,7 +45,7 @@ open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
 
 ### 方式二 · 下载预编译版
 
-从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-x.y.z.zip`，解压拖到 `/Applications`。
+从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-1.3.0.zip`，解压拖到 `/Applications`。
 
 > 预编译版是 **Apple Silicon（arm64）**；Intel Mac 请走方式一。
 >
@@ -85,7 +85,7 @@ open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
 ```bash
 swift run            # 直接跑
 ./build.sh           # 打包 Pasta.app（自签名 / ad-hoc，自动带图标）
-./release.sh 1.0.0   # 打包成 dist/Pasta-1.0.0.zip（发布用）
+./release.sh 1.3.0   # 打包成 dist/Pasta-1.3.0.zip（发布用）
 ```
 
 源码在 `Sources/Pasta/`：AppKit 菜单栏 App，剪贴板轮询、Carbon 全局热键、CGEvent 模拟粘贴、底部卡片栏面板。图标源在 `_design/icon-final.html`。
