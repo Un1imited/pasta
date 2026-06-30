@@ -29,10 +29,14 @@ struct Theme {
     let cardShadowHover: Float       // hover 投影浓度
     let kindBG: NSColor             // 类型标签底色
 
+    /// 非 nil 时面板底改用横向渐变（玻璃拟态）；nil 用纯色 shelfTint。
+    var gradient: [NSColor]? = nil
+    var gradientLocations: [NSNumber]? = nil
+
     // MARK: - 当前主题（卡片视图取色用）
     static var current: Theme = .midnight
 
-    static let all: [Theme] = [.midnight, .daylight, .ink]
+    static let all: [Theme] = [.midnight, .glass, .daylight, .ink]
     static func by(id: String) -> Theme { all.first { $0.id == id } ?? .midnight }
 
     // MARK: - 1 · 午夜青（默认）
@@ -98,4 +102,32 @@ struct Theme {
         cardInsetHi: NSColor(white: 1, alpha: 0.10),
         cardShadow: .black, cardShadowNormal: 0.55, cardShadowHover: 0.62,
         kindBG: NSColor(srgbRed: 0.91, green: 0.788, blue: 0.478, alpha: 0.15))
+
+    // MARK: - 4 · 晶蓝（玻璃拟态）— 深蓝横向渐变底 + 半透玻璃卡
+    static let glass = Theme(
+        id: "glass", name: "晶蓝",
+        blurMaterial: .hudWindow, appearance: .darkAqua,
+        shelfTint: NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.82),  // 渐变缺省时的兜底
+        topEdge: NSColor(white: 1, alpha: 0.22),
+        glow: NSColor(srgbRed: 0.373, green: 0.588, blue: 0.922, alpha: 0.16),
+        primaryText: NSColor(white: 1, alpha: 0.95),
+        secondaryText: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.55),
+        accent: NSColor(srgbRed: 0.353, green: 0.659, blue: 0.961, alpha: 1),         // #5AA8F5
+        accentGlow: NSColor(srgbRed: 0.353, green: 0.659, blue: 0.961, alpha: 0.50),
+        cardBG: NSColor(srgbRed: 0.608, green: 0.745, blue: 0.910, alpha: 0.13),       // 半透，透出渐变
+        cardHoverBG: NSColor(srgbRed: 0.647, green: 0.784, blue: 0.949, alpha: 0.20),
+        cardFG: NSColor(white: 1, alpha: 0.92),
+        cardDim: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.55),
+        cardFaint: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.40),
+        cardBorder: NSColor(white: 1, alpha: 0.14),
+        cardInsetHi: NSColor(white: 1, alpha: 0.24),
+        cardShadow: .black, cardShadowNormal: 0.34, cardShadowHover: 0.46,
+        kindBG: NSColor(srgbRed: 0.345, green: 0.651, blue: 0.961, alpha: 0.20),
+        gradient: [
+            NSColor(srgbRed: 0.078, green: 0.094, blue: 0.122, alpha: 0.82),  // #14181f 左暗
+            NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.82),  // #1c2740
+            NSColor(srgbRed: 0.161, green: 0.263, blue: 0.408, alpha: 0.82),  // #294368 中右最亮
+            NSColor(srgbRed: 0.129, green: 0.188, blue: 0.290, alpha: 0.82),  // #21304a 右
+        ],
+        gradientLocations: [0.0, 0.36, 0.62, 1.0])
 }
