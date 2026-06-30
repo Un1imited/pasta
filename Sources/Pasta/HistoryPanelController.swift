@@ -80,6 +80,10 @@ final class ClipCardView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
     func configure(_ item: ClipItem) {
+        // 复用卡片时清掉上一条的选中/hover 状态，避免残留高亮。
+        selected = false
+        hovering = false
+        selFocused = true
         isImage = item.kind == .image
         theme = Theme.current
         countLabel.stringValue = item.footerInfo
@@ -272,6 +276,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private var panel: KeyablePanel!
     private var blur: NSVisualEffectView!
     private var tint: NSView!
+    private var shelfGradient: CAGradientLayer!     // 玻璃拟态：横向渐变底（非渐变主题时隐藏）
     private var brandGlow: NSView!
     private var glowLayer: CAGradientLayer!
     private var topHighlight: NSView!
@@ -344,6 +349,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         tint.frame = blur.bounds
         tint.autoresizingMask = [.width, .height]
         blur.addSubview(tint)
+
+        // 玻璃拟态横向渐变底（默认隐藏，仅渐变主题启用）
+        shelfGradient = CAGradientLayer()
+        shelfGradient.startPoint = CGPoint(x: 0, y: 0.5)
+        shelfGradient.endPoint = CGPoint(x: 1, y: 0.5)
+        shelfGradient.frame = CGRect(x: 0, y: 0, width: blur.bounds.width, height: shelfHeight)
+        shelfGradient.isHidden = true
+        tint.layer?.addSublayer(shelfGradient)
 
         // 顶部品牌色微光（主题驱动）
         brandGlow = NSView()
@@ -458,6 +471,9 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         hintLabel.frame = NSRect(x: W - 230, y: yc - 8, width: 150, height: 16)
         countLabel.frame = NSRect(x: W - 70, y: yc - 9, width: 56, height: 18)
         divider.frame = NSRect(x: 0, y: H - toolbarH, width: W, height: 0.5)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        shelfGradient.frame = CGRect(x: 0, y: 0, width: W, height: H)
+        CATransaction.commit()
         cardScroll.frame = NSRect(x: 0, y: 0, width: W, height: H - toolbarH)
         emptyLabel.frame = NSRect(x: 0, y: 0, width: W, height: H - toolbarH)
     }
@@ -491,6 +507,16 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         panel.appearance = NSAppearance(named: theme.appearance)
         blur.material = theme.blurMaterial
         tint.layer?.backgroundColor = theme.shelfTint.cgColor
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if let g = theme.gradient {
+            shelfGradient.isHidden = false
+            shelfGradient.colors = g.map { $0.cgColor }
+            shelfGradient.locations = theme.gradientLocations
+            tint.layer?.backgroundColor = NSColor.clear.cgColor   // 渐变层接管底色
+        } else {
+            shelfGradient.isHidden = true
+        }
+        CATransaction.commit()
         topHighlight.layer?.backgroundColor = theme.topEdge.cgColor
         glowLayer.colors = [theme.glow.cgColor, NSColor.clear.cgColor]
         divider.fillColor = theme.cardBorder
@@ -536,12 +562,27 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         showPinnedOnly = false
         focusZone = .cards
         updateTabs()
-        refilter()
-        updateFocusVisuals()
+
+        // 先清掉上一次的卡片内容：既避免推迟构建期间残留旧数据，
+        // 也防止用户在卡片建好前回车误粘上一次的选中项。
+        filtered = []
+        selectedIndex = 0
+        cardViews.forEach { $0.isHidden = true }
+        countLabel.stringValue = ""
+        emptyLabel.isHidden = true
+
+        // 先把面板显示出来，让用户立刻看到它。
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeFirstResponder(searchField)
         installKeyMonitor()
+
+        // 卡片构建推迟到下一拍执行：面板已经出现，长历史也不会卡顿。
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.panel.isVisible else { return }
+            self.refilter()
+            self.updateFocusVisuals()
+        }
     }
 
     func hide() {
@@ -657,17 +698,26 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     }
 
     private func rebuildCards() {
-        cardViews.forEach { $0.removeFromSuperview() }
-        cardViews = []
-
         let scrollH = cardScroll.frame.height
         let cardY = (scrollH - ClipCardView.cardH) / 2
         // 卡片宽度自适应屏宽：一屏正好显示约 8 个
         let target: CGFloat = 8
         let scrollW = cardScroll.frame.width
         let cardW = min(260, max(170, (scrollW - pad * 2 - gap * (target - 1)) / target))
-        for (i, item) in filtered.enumerated() {
+
+        // 复用卡片视图池：按需补足/裁剪，避免每次唤起都销毁重建几百个视图。
+        while cardViews.count < filtered.count {
             let card = ClipCardView()
+            cardStrip.addSubview(card)
+            cardViews.append(card)
+        }
+        while cardViews.count > filtered.count {
+            cardViews.removeLast().removeFromSuperview()
+        }
+
+        for (i, item) in filtered.enumerated() {
+            let card = cardViews[i]
+            card.isHidden = false
             card.frame = NSRect(x: pad + CGFloat(i) * (cardW + gap),
                                 y: cardY, width: cardW, height: ClipCardView.cardH)
             card.configure(item)
@@ -677,8 +727,6 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 self?.selectIndex(idx)
                 self?.pasteSelected(plain: Settings.shared.plainTextPaste)
             }
-            cardStrip.addSubview(card)
-            cardViews.append(card)
         }
         let contentW = pad * 2 + CGFloat(filtered.count) * cardW
             + CGFloat(max(0, filtered.count - 1)) * gap

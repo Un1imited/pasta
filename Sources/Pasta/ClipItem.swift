@@ -1,4 +1,14 @@
 import AppKit
+import ImageIO
+
+/// 进程级缓存：来源 App 名/图标按 bundleID 缓存，缩略图/尺寸按记录 id 缓存。
+/// 避免每次唤起面板都重复做磁盘查询与整图解码（长历史时这是卡顿主因）。
+private enum ClipCaches {
+    static var appNames: [String: String?] = [:]
+    static var appIcons: [String: NSImage?] = [:]
+    static let thumbnails = NSCache<NSUUID, NSImage>()
+    static var imageSizes: [UUID: NSSize] = [:]
+}
 
 /// 一条剪贴板历史记录。文本 / 图片 / 文件三种类型。
 struct ClipItem: Codable, Identifiable {
@@ -75,12 +85,24 @@ struct ClipItem: Codable, Identifiable {
         return f.string(from: date)
     }
 
+    /// 图片像素尺寸：用 ImageIO 只读元数据，不整图解码；按 id 缓存。
+    var imageSize: NSSize? {
+        guard kind == .image, let data = imageData else { return nil }
+        if let s = ClipCaches.imageSizes[id] { return s }
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = (props[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
+              let h = (props[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue else { return nil }
+        let size = NSSize(width: w, height: h)
+        ClipCaches.imageSizes[id] = size
+        return size
+    }
+
     /// 卡片底部信息：字符数 / 尺寸 / 文件数。
     var footerInfo: String {
         switch kind {
         case .image:
-            if let d = imageData, let img = NSImage(data: d) {
-                let s = img.size
+            if let s = imageSize {
                 return "\(Int(s.width)) × \(Int(s.height))"
             }
             return "图片"
@@ -92,12 +114,19 @@ struct ClipItem: Codable, Identifiable {
         }
     }
 
-    /// 来源 App 的显示名（飞书 / 终端 / PyCharm…），解析不到为 nil。
+    /// 来源 App 的显示名（飞书 / 终端 / PyCharm…），解析不到为 nil。按 bundleID 缓存。
     var sourceAppName: String? {
-        guard let bid = sourceBundleID,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) else { return nil }
-        let name = FileManager.default.displayName(atPath: url.path)
-        return name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+        guard let bid = sourceBundleID else { return nil }
+        if let cached = ClipCaches.appNames[bid] { return cached }
+        let resolved: String?
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) {
+            let name = FileManager.default.displayName(atPath: url.path)
+            resolved = name.hasSuffix(".app") ? String(name.dropLast(4)) : name
+        } else {
+            resolved = nil
+        }
+        ClipCaches.appNames[bid] = resolved
+        return resolved
     }
 
     /// 表头是否显示类型词（纯文本不显示，链接/图片/文件/邮箱等才显示）。
@@ -125,11 +154,18 @@ struct ClipItem: Codable, Identifiable {
         return darkApps.contains { b.hasPrefix($0) }
     }
 
-    /// 来源 App 图标（按 bundle id 解析）。
+    /// 来源 App 图标（按 bundle id 解析）。按 bundleID 缓存。
     var sourceAppIcon: NSImage? {
-        guard let bid = sourceBundleID,
-              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) else { return nil }
-        return NSWorkspace.shared.icon(forFile: url.path)
+        guard let bid = sourceBundleID else { return nil }
+        if let cached = ClipCaches.appIcons[bid] { return cached }
+        let icon: NSImage?
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) {
+            icon = NSWorkspace.shared.icon(forFile: url.path)
+        } else {
+            icon = nil
+        }
+        ClipCaches.appIcons[bid] = icon
+        return icon
     }
 
     /// 类型中文名（底栏显示）。
@@ -147,8 +183,7 @@ struct ClipItem: Codable, Identifiable {
     var previewBody: String {
         switch kind {
         case .image:
-            if let data = imageData, let img = NSImage(data: data) {
-                let s = img.size
+            if let s = imageSize {
                 return "图片 \(Int(s.width))×\(Int(s.height))"
             }
             return "图片"
@@ -161,9 +196,20 @@ struct ClipItem: Codable, Identifiable {
         }
     }
 
-    /// 列表行的缩略图（仅图片有）。
+    /// 列表行的缩略图（仅图片有）。用 ImageIO 生成降采样缩略图（不整图解码）并按 id 缓存。
     var thumbnail: NSImage? {
         guard kind == .image, let data = imageData else { return nil }
-        return NSImage(data: data)
+        let key = id as NSUUID
+        if let cached = ClipCaches.thumbnails.object(forKey: key) { return cached }
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 400,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        let img = NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+        ClipCaches.thumbnails.setObject(img, forKey: key)
+        return img
     }
 }
