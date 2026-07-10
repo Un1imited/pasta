@@ -18,6 +18,7 @@ final class Settings {
         static let plainTextPaste = "plainTextPaste"
         static let expirationDays = "expirationDays"
         static let themeID = "themeID"
+        static let hasCompletedFirstRun = "hasCompletedFirstRun"
     }
 
     private init() {
@@ -40,7 +41,7 @@ final class Settings {
             NotificationCenter.default.post(name: Settings.themeChanged, object: nil)
         }
     }
-    var theme: Theme { Theme.by(id: themeID) }
+    var theme: Theme { Theme.resolved(id: themeID) }
 
     static let maxExpirationDays = 180      // 历史最长保留 6 个月
 
@@ -55,6 +56,13 @@ final class Settings {
         defaults.set(Int(modifiers), forKey: K.hotKeyModifiers)
         defaults.set(display, forKey: K.hotKeyDisplay)
         NotificationCenter.default.post(name: Settings.hotKeyChanged, object: nil)
+    }
+
+    // MARK: - 首次启动
+
+    var hasCompletedFirstRun: Bool {
+        get { defaults.bool(forKey: K.hasCompletedFirstRun) }
+        set { defaults.set(newValue, forKey: K.hasCompletedFirstRun) }
     }
 
     // MARK: - 纯文本粘贴

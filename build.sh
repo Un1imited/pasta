@@ -5,6 +5,8 @@ cd "$(dirname "$0")"
 
 APP="Pasta.app"
 BIN_NAME="Pasta"
+# 版本号：release.sh 通过 PASTA_VERSION 注入，本地构建用默认值
+VERSION="${PASTA_VERSION:-1.4.0}"
 
 # PASTA_UNIVERSAL=1 时编通用二进制（arm64 + x86_64，兼容 Intel），用于发布
 ARCH_FLAGS=()
@@ -32,7 +34,7 @@ if [[ -f "Resources/AppIcon.icns" ]]; then
   cp "Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -43,8 +45,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key>      <string>Pasta</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key>         <string>1</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+    <key>CFBundleVersion</key>         <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>  <string>13.0</string>
     <key>LSUIElement</key>             <true/>
     <key>NSPrincipalClass</key>        <string>NSApplication</string>
@@ -56,13 +58,15 @@ PLIST
 # 用固定的自签名证书签名：代码身份（DR）跨重建保持稳定，
 # 「辅助功能」授权只需给一次，以后重新构建不会再失效。
 # 没有该证书的机器自动回退 ad-hoc。
+# 签名失败必须让脚本失败：arm64 上未签名的二进制根本无法运行，
+# 静默吞掉错误会产出一个坏 App 还报"完成"。
 IDENTITY="Pasta Self Signed"
 if security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then
   echo "==> 用证书签名: $IDENTITY"
-  codesign --force --deep --sign "$IDENTITY" "$APP" >/dev/null 2>&1 || true
+  codesign --force --sign "$IDENTITY" "$APP"
 else
   echo "==> 证书不存在，回退 ad-hoc 签名（授权会在重建后失效）"
-  codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
+  codesign --force --sign - "$APP"
 fi
 
 echo "==> 完成: $(pwd)/${APP}"
