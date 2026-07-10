@@ -17,8 +17,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusItem()
         monitor.start()
 
+        // 「跟随系统」主题：系统深浅色切换时刷新。
+        // 通知可能先于 NSApp.effectiveAppearance 更新到达，异步一拍再解析主题。
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil, queue: .main
+        ) { _ in
+            DispatchQueue.main.async {
+                if Settings.shared.themeID == Theme.autoID {
+                    NotificationCenter.default.post(name: Settings.themeChanged, object: nil)
+                }
+            }
+        }
+
         panel.onPaste = { [weak self] item, plain in
             self?.performPaste(item, plainText: plain)
+        }
+        // 缺辅助功能权限时的退路：只写剪贴板，不模拟 ⌘V（面板负责就地提示）。
+        panel.onCopyOnly = { [weak self] item, plain in
+            self?.writePasteboard(item, plainText: plain)
+            self?.monitor.suppressNextChange()
         }
 
         // 全局热键：从设置读取，并监听改键。
@@ -43,34 +61,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.store.purgeExpired()
         }
 
-        // 模拟粘贴需要「辅助功能」权限，启动时引导一次。
-        Paster.ensureAccessibilityPermission()
+        // 权限申请刻意不在启动时做：启动即弹系统授权吓人且归因不明。
+        // 推迟到首次真正回车粘贴——面板的权限 toast 会就地解释并直达设置。
+
+        // 首次启动：自动唤起一次面板，让教学空态（"复制任意内容试试…"）完成自我介绍。
+        if !Settings.shared.hasCompletedFirstRun {
+            Settings.shared.hasCompletedFirstRun = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.togglePanel(forceShow: true)
+            }
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        store.flush()   // 落盘挂起的写盘合并
     }
 
     // MARK: - 菜单栏
 
-    /// 自绘的菜单栏单色模板图标：精修剪贴板（板面 + 夹子 + 两行）。
+    /// 自绘的菜单栏单色模板图标：「层叠卡片」——剪贴历史 = 不止一张卡。
+    /// 后卡右上露出一角（上一条记录），前卡 = 面板卡片（圆角卡 + 一长一短内容行）。
+    /// 纯面性无描边（1x 不糊化），关键几何落在 0.25pt 网格。设计稿见 _design/menubar-icon-v1.png。
     private static func makeMenuBarIcon() -> NSImage {
-        let size = NSSize(width: 18, height: 18)
-        let img = NSImage(size: size, flipped: true) { _ in
-            let s: CGFloat = 18.0 / 28.0            // 设计 viewBox 28 → 18pt
-            func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint { NSPoint(x: x * s, y: y * s) }
-            let lw: CGFloat = 1.5 * s               // 超细精准线条
-            NSColor.black.setStroke()
+        let img = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            NSColor.black.setFill()
 
-            let board = NSBezierPath(roundedRect: NSRect(x: 6.5 * s, y: 5.5 * s, width: 15 * s, height: 18 * s),
-                                     xRadius: 3 * s, yRadius: 3 * s)
-            board.lineWidth = lw; board.lineJoinStyle = .round; board.stroke()
+            // 后卡：右上方露出一角
+            NSBezierPath(roundedRect: NSRect(x: 6.5, y: 2.0, width: 9.0, height: 11.5),
+                         xRadius: 2.25, yRadius: 2.25).fill()
 
-            let clip = NSBezierPath(roundedRect: NSRect(x: 10.7 * s, y: 3.5 * s, width: 6.6 * s, height: 4.6 * s),
-                                    xRadius: 2.1 * s, yRadius: 2.1 * s)
-            clip.lineWidth = lw; clip.lineJoinStyle = .round; clip.stroke()
+            // 前卡外扩 1.1pt 的呼吸缝：把后卡被压住的部分挖掉
+            ctx.setBlendMode(.destinationOut)
+            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.5, width: 9.5, height: 11.5).insetBy(dx: -1.1, dy: -1.1),
+                         xRadius: 3.35, yRadius: 3.35).fill()
+            ctx.setBlendMode(.normal)
 
-            for (x2, y) in [(17.8, 13.0), (15.4, 17.0)] {
-                let line = NSBezierPath()
-                line.move(to: pt(10.2, y)); line.line(to: pt(x2, y))
-                line.lineWidth = lw; line.lineCapStyle = .round; line.stroke()
-            }
+            // 前卡：主体
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.5, width: 9.5, height: 11.5),
+                         xRadius: 2.25, yRadius: 2.25).fill()
+
+            // 前卡内容行：一长一短，镂空
+            ctx.setBlendMode(.destinationOut)
+            NSBezierPath(roundedRect: NSRect(x: 4.75, y: 8.0, width: 5.0, height: 1.5),
+                         xRadius: 0.75, yRadius: 0.75).fill()
+            NSBezierPath(roundedRect: NSRect(x: 4.75, y: 11.0, width: 3.5, height: 1.5),
+                         xRadius: 0.75, yRadius: 0.75).fill()
+            ctx.setBlendMode(.normal)
             return true
         }
         img.isTemplate = true
@@ -112,7 +150,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPanel() { togglePanel(forceShow: true) }
 
-    @objc private func clearHistory() { store.clear() }
+    @objc private func clearHistory() {
+        let count = store.items.filter { !$0.pinned }.count
+        guard count > 0 else { return }
+        let alert = NSAlert()
+        alert.messageText = "清空剪贴历史？"
+        alert.informativeText = "将删除 \(count) 条记录，常用（置顶）项会保留。此操作不可撤销。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "清空")
+        alert.addButton(withTitle: "取消")
+        // 破坏性动作标红，回车默认键让给"取消"（HIG：默认键不应指向不可撤销的删除）
+        alert.buttons[0].hasDestructiveAction = true
+        alert.buttons[0].keyEquivalent = ""
+        alert.buttons[1].keyEquivalent = "\r"
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            store.clear()
+        }
+    }
 
     @objc private func openPreferences() { preferences.showCentered() }
 
@@ -140,6 +195,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - 执行粘贴
 
     private func performPaste(_ item: ClipItem, plainText: Bool) {
+        writePasteboard(item, plainText: plainText)
+        monitor.suppressNextChange()
+
+        // 让焦点回到唤起前的 App。优先精确激活，否则隐藏自己让系统自动回退。
+        let myBundleID = Bundle.main.bundleIdentifier
+        if let prev = previousApp, prev.bundleIdentifier != myBundleID {
+            prev.activate()
+        } else {
+            NSApp.hide(nil)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            Paster.simulatePasteShortcut()
+        }
+    }
+
+    /// 把选中项写入系统剪贴板（不模拟粘贴）。
+    private func writePasteboard(_ item: ClipItem, plainText: Bool) {
         let pb = NSPasteboard.general
         switch item.kind {
         case .text:
@@ -164,21 +236,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case .image:
             pb.clearContents()
-            if let data = item.imageData, let img = NSImage(data: data) {
+            if let data = item.imageBytes, let img = NSImage(data: data) {
                 pb.writeObjects([img])
             }
-        }
-        monitor.suppressNextChange()
-
-        // 让焦点回到唤起前的 App。优先精确激活，否则隐藏自己让系统自动回退。
-        let myBundleID = Bundle.main.bundleIdentifier
-        if let prev = previousApp, prev.bundleIdentifier != myBundleID {
-            prev.activate()
-        } else {
-            NSApp.hide(nil)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            Paster.simulatePasteShortcut()
         }
     }
 }

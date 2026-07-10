@@ -5,6 +5,7 @@ import Carbon
 final class HotKeyRecorderButton: NSButton {
     private var recording = false
     private var monitor: Any?
+    private var windowObservers: [NSObjectProtocol] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -21,6 +22,14 @@ final class HotKeyRecorderButton: NSButton {
         title = recording ? "按下快捷键…  (esc 取消)" : Settings.shared.hotKeyDisplay
     }
 
+    /// 录制态视觉：系统强调色描边（偏好窗口属于"系统世界"，用 controlAccentColor 而非面板主题色）。
+    private func refreshRecordingVisual() {
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.borderWidth = recording ? 2 : 0
+        layer?.borderColor = recording ? NSColor.controlAccentColor.cgColor : NSColor.clear.cgColor
+    }
+
     @objc private func toggleRecording() {
         recording ? stopRecording() : startRecording()
     }
@@ -28,17 +37,39 @@ final class HotKeyRecorderButton: NSButton {
     private func startRecording() {
         recording = true
         refreshTitle()
+        refreshRecordingVisual()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handle(event)
             return nil   // 录制期间吞掉按键
         }
+        // 关窗/失焦时必须停录：否则 monitor 残留，全 App 键盘被静默吞掉。
+        if let win = window {
+            let nc = NotificationCenter.default
+            windowObservers = [
+                nc.addObserver(forName: NSWindow.willCloseNotification, object: win, queue: .main) { [weak self] _ in
+                    self?.stopRecording()
+                },
+                nc.addObserver(forName: NSWindow.didResignKeyNotification, object: win, queue: .main) { [weak self] _ in
+                    self?.stopRecording()
+                },
+            ]
+        }
     }
 
     private func stopRecording() {
+        guard recording else { return }
         recording = false
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+        windowObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        windowObservers = []
         refreshTitle()
+        refreshRecordingVisual()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { stopRecording() }
     }
 
     private func handle(_ event: NSEvent) {

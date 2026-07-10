@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon
 
 /// 负责申请辅助功能权限、模拟 ⌘V 把内容粘贴到目标 App。
 enum Paster {
@@ -13,6 +14,18 @@ enum Paster {
 
     static var hasAccessibilityPermission: Bool {
         AXIsProcessTrusted()
+    }
+
+    /// 系统是否处于安全键盘输入状态（密码框、终端 Secure Keyboard Entry）。
+    /// 此状态下模拟 ⌘V 会被系统抑制。
+    static var isSecureInputActive: Bool {
+        IsSecureEventInputEnabled()
+    }
+
+    /// 打开系统设置的「隐私与安全性 → 辅助功能」页。
+    static func openAccessibilitySettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 
     /// 模拟一次 ⌘V。
