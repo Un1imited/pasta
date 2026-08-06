@@ -44,11 +44,16 @@ final class HistoryDB {
               rtf BLOB,
               pinned INTEGER NOT NULL DEFAULT 0,
               date REAL NOT NULL,
-              source_bundle_id TEXT
+              source_bundle_id TEXT,
+              ocr_text TEXT
             )
             """),
             exec("CREATE INDEX IF NOT EXISTS idx_items_date ON items(date DESC)")
         else { return false }
+        // v3 早期库无 ocr_text 列：就地补列（幂等）
+        if !columnExists("ocr_text", table: "items") {
+            _ = exec("ALTER TABLE items ADD COLUMN ocr_text TEXT")
+        }
         // FTS 是增强不是前提：trigram 不可用时静默降级
         ftsAvailable = exec("""
             CREATE VIRTUAL TABLE IF NOT EXISTS items_fts
@@ -83,6 +88,13 @@ final class HistoryDB {
         return true
     }
 
+    private func columnExists(_ column: String, table: String, schema: String = "main") -> Bool {
+        guard let s = prepare("SELECT COUNT(*) FROM \(schema).pragma_table_info('\(table)') WHERE name=?") else { return false }
+        defer { sqlite3_finalize(s) }
+        sqlite3_bind_text(s, 1, column, -1, Self.transient)
+        return sqlite3_step(s) == SQLITE_ROW && sqlite3_column_int(s, 0) > 0
+    }
+
     private func prepare(_ sql: String) -> OpaquePointer? {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
@@ -95,7 +107,7 @@ final class HistoryDB {
     // MARK: - CRUD
 
     func insert(_ item: ClipItem) {
-        guard let s = prepare("INSERT OR REPLACE INTO items (id,kind,text,rtf,pinned,date,source_bundle_id) VALUES (?,?,?,?,?,?,?)") else { return }
+        guard let s = prepare("INSERT OR REPLACE INTO items (id,kind,text,rtf,pinned,date,source_bundle_id,ocr_text) VALUES (?,?,?,?,?,?,?,?)") else { return }
         defer { sqlite3_finalize(s) }
         sqlite3_bind_text(s, 1, item.id.uuidString, -1, Self.transient)
         sqlite3_bind_text(s, 2, item.kind.rawValue, -1, Self.transient)
@@ -106,8 +118,31 @@ final class HistoryDB {
         sqlite3_bind_int(s, 5, item.pinned ? 1 : 0)
         sqlite3_bind_double(s, 6, item.date.timeIntervalSince1970)
         if let b = item.sourceBundleID { sqlite3_bind_text(s, 7, b, -1, Self.transient) } else { sqlite3_bind_null(s, 7) }
+        if let o = item.ocrText { sqlite3_bind_text(s, 8, o, -1, Self.transient) } else { sqlite3_bind_null(s, 8) }
         sqlite3_step(s)
         restrictPermissions()   // WAL/SHM 可能在首写时才出现
+    }
+
+    /// 图片 OCR 完成后落库。
+    func updateOCR(id: UUID, text: String) {
+        guard let s = prepare("UPDATE items SET ocr_text=? WHERE id=?") else { return }
+        defer { sqlite3_finalize(s) }
+        sqlite3_bind_text(s, 1, text, -1, Self.transient)
+        sqlite3_bind_text(s, 2, id.uuidString, -1, Self.transient)
+        sqlite3_step(s)
+    }
+
+    /// 尚未 OCR 的图片记录 id（启动回填用）。
+    func pendingOCRIDs() -> [UUID] {
+        guard let s = prepare("SELECT id FROM items WHERE kind='image' AND (ocr_text IS NULL OR ocr_text='')") else { return [] }
+        defer { sqlite3_finalize(s) }
+        var out: [UUID] = []
+        while sqlite3_step(s) == SQLITE_ROW {
+            if let str = sqlite3_column_text(s, 0).map({ String(cString: $0) }), let id = UUID(uuidString: str) {
+                out.append(id)
+            }
+        }
+        return out
     }
 
     func updatePinned(id: UUID, pinned: Bool) {
@@ -143,7 +178,7 @@ final class HistoryDB {
 
     /// 全量加载元数据（不含 rtf，按时间倒序）。仅启动时调用一次。
     func loadAll() -> [ClipItem] {
-        guard let s = prepare("SELECT id,kind,text,pinned,date,source_bundle_id FROM items ORDER BY date DESC") else { return [] }
+        guard let s = prepare("SELECT id,kind,text,pinned,date,source_bundle_id,ocr_text FROM items ORDER BY date DESC") else { return [] }
         defer { sqlite3_finalize(s) }
         var out: [ClipItem] = []
         while sqlite3_step(s) == SQLITE_ROW {
@@ -151,12 +186,14 @@ final class HistoryDB {
                   let id = UUID(uuidString: idStr),
                   let kindStr = sqlite3_column_text(s, 1).map({ String(cString: $0) }),
                   let kind = ClipItem.Kind(rawValue: kindStr) else { continue }
-            out.append(ClipItem(
+            var item = ClipItem(
                 id: id, kind: kind,
                 text: sqlite3_column_text(s, 2).map { String(cString: $0) },
                 pinned: sqlite3_column_int(s, 3) != 0,
                 date: Date(timeIntervalSince1970: sqlite3_column_double(s, 4)),
-                sourceBundleID: sqlite3_column_text(s, 5).map { String(cString: $0) }))
+                sourceBundleID: sqlite3_column_text(s, 5).map { String(cString: $0) })
+            item.ocrText = sqlite3_column_text(s, 6).map { String(cString: $0) }
+            out.append(item)
         }
         return out
     }
@@ -174,5 +211,28 @@ final class HistoryDB {
         guard let s = prepare("SELECT COUNT(*) FROM items") else { return true }
         defer { sqlite3_finalize(s) }
         return sqlite3_step(s) == SQLITE_ROW ? sqlite3_column_int(s, 0) == 0 : true
+    }
+
+    // MARK: - 备份
+
+    /// 把 WAL 合并回主库文件：导出前调用，保证单个 .db 文件即完整数据。
+    func checkpoint() {
+        exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    }
+
+    /// 从另一份 Pasta 备份库合并记录（按 id 去重，已存在的跳过）。返回新增条数。
+    func merge(from dbPath: String) -> Int {
+        guard let a = prepare("ATTACH DATABASE ? AS src") else { return 0 }
+        sqlite3_bind_text(a, 1, dbPath, -1, Self.transient)
+        let attached = sqlite3_step(a) == SQLITE_DONE
+        sqlite3_finalize(a)
+        guard attached else { return 0 }
+        defer { exec("DETACH DATABASE src") }
+        // 旧版备份包可能没有 ocr_text 列：按来源实际 schema 组列清单
+        let cols = columnExists("ocr_text", table: "items", schema: "src")
+            ? "id,kind,text,rtf,pinned,date,source_bundle_id,ocr_text"
+            : "id,kind,text,rtf,pinned,date,source_bundle_id"
+        guard exec("INSERT OR IGNORE INTO items (\(cols)) SELECT \(cols) FROM src.items") else { return 0 }
+        return Int(sqlite3_changes(db))
     }
 }

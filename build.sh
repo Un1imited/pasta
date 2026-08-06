@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 APP="Pasta.app"
 BIN_NAME="Pasta"
 # 版本号：release.sh 通过 PASTA_VERSION 注入，本地构建用默认值
-VERSION="${PASTA_VERSION:-1.5.0}"
+VERSION="${PASTA_VERSION:-1.6.0}"
 
 # PASTA_UNIVERSAL=1 时编通用二进制（arm64 + x86_64，兼容 Intel），用于发布
 ARCH_FLAGS=()

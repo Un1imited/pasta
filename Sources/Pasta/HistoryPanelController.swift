@@ -92,7 +92,7 @@ final class ClipCardView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
 
-    func configure(_ item: ClipItem) {
+    func configure(_ item: ClipItem, highlight: String? = nil) {
         // 复用卡片时清掉上一条的选中/hover/编号状态，避免残留高亮。
         selected = false
         hovering = false
@@ -119,6 +119,7 @@ final class ClipCardView: NSView {
             bodyImage.isHidden = true
             bodyText.isHidden = false
             bodyText.stringValue = item.bodyText
+            applyHighlight(highlight)
         }
         applyTone()
         applyMeta(item)        // 表头：纯文本只留时间，特殊类型才显示类型词
@@ -133,6 +134,26 @@ final class ClipCardView: NSView {
         if item.pinned { ax += "，已收藏" }
         setAccessibilityLabel(ax)
         setAccessibilitySelected(false)
+    }
+
+    /// 搜索命中高亮：正文里的命中片段上 accent 色 + 淡底。只加色彩属性不动字体，
+    /// 不影响 layout() 的文本测量。拼音命中（原文无该子串）不高亮——避免错标位置。
+    private func applyHighlight(_ query: String?) {
+        guard let q = query, !q.isEmpty else { return }
+        let body = bodyText.stringValue
+        let lower = body.lowercased()
+        guard lower.contains(q) else { return }
+        let attr = NSMutableAttributedString(string: body,
+            attributes: [.foregroundColor: theme.cardFG])
+        var searchFrom = lower.startIndex
+        while let r = lower.range(of: q, range: searchFrom..<lower.endIndex) {
+            attr.addAttributes([
+                .foregroundColor: theme.accent,
+                .backgroundColor: theme.accent.withAlphaComponent(0.16),
+            ], range: NSRange(r, in: body))
+            searchFrom = r.upperBound
+        }
+        bodyText.attributedStringValue = attr
     }
 
     /// 表头内容：纯文本 → 仅时间；链接/图片/文件/邮箱 → 「类型(强调色) · 时间」。
@@ -354,7 +375,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     }
     private var hintFull: String {
         (Settings.shared.plainTextPaste ? "↩ 纯文本粘贴 · ⌥↩ 同" : "↩ 粘贴 · ⌥↩ 纯文本")
-            + " · ⌘1-9 直达 · ⌘P 常用 · ⌘⌫ 删除 · ⌘Z 撤销 · ⌘←→ 标签 · esc 关闭"
+            + " · 空格 预览 · ⌘C 复制 · ⌘1-9 直达 · ⌘P 常用 · ⌘⌫ 删除 · ⌘Z 撤销 · ⌘←→ 标签 · esc 关闭"
     }
     /// ⌘+数字 → 直达粘贴第 N 条（ANSI 键位码）
     private static let digitKeys: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
@@ -381,6 +402,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private var toastView: NSView?
     private var toastTimer: Timer?
     private var toastAction: (() -> Void)?
+    private let preview = PreviewPanel()
 
     /// 最近一次唤起时间：失活收面板的宽限期判定用。
     private var shownAt = Date.distantPast
@@ -588,8 +610,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         tabContainer.setFrameOrigin(NSPoint(x: 12 + searchW + 12, y: yc - tabContainer.frame.height / 2))
         // hint 弹性宽度：标签区右缘 → 条数左缘，右对齐（按住 ⌘ 展开全部键位时也放得下）
         let hintLeft = 12 + searchW + 12 + tabContainer.frame.width + 16
-        hintLabel.frame = NSRect(x: hintLeft, y: yc - 8, width: max(0, W - 80 - hintLeft), height: 16)
-        countLabel.frame = NSRect(x: W - 70, y: yc - 9, width: 56, height: 18)
+        hintLabel.frame = NSRect(x: hintLeft, y: yc - 8, width: max(0, W - 158 - hintLeft), height: 16)
+        countLabel.frame = NSRect(x: W - 148, y: yc - 9, width: 134, height: 18)   // 容「前 300 · 共 5000 条」
         divider.frame = NSRect(x: 0, y: H - toolbarH, width: W, height: 0.5)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         shelfGradient.frame = CGRect(x: 0, y: 0, width: W, height: H)
@@ -734,6 +756,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     }
 
     func hide() {
+        preview.hide()
         hideToast()
         removeKeyMonitor()
         panel.orderOut(nil)
@@ -802,14 +825,20 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                     self.pasteSelected(plain: plain)           // 搜索/卡片区回车 → 粘贴选中项
                 }
                 return nil
-            case 53:                                            // esc：两段式，先清查询再关面板
-                if !self.searchField.stringValue.isEmpty {
+            case 49 where self.searchField.stringValue.isEmpty:  // 空格：Quick Look 式预览（有查询时空格归输入框）
+                self.togglePreview()
+                return nil
+            case 53:                                            // esc：三段式，预览 → 清查询 → 关面板
+                if self.preview.isVisible {
+                    self.preview.hide()
+                } else if !self.searchField.stringValue.isEmpty {
                     self.clearSearch()
                 } else {
                     self.hide()
                 }
                 return nil
             case 35 where cmd: self.togglePinSelected(); return nil   // ⌘P
+            case 8 where cmd: self.copySelected(); return nil         // ⌘C 仅复制（不粘贴不关面板）
             case 51 where cmd: self.deleteSelected(); return nil      // ⌘⌫
             case 6 where cmd: self.undoDelete(); return nil           // ⌘Z 撤销删除
             default: return event
@@ -858,6 +887,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         let plain = menu.addItem(withTitle: "粘贴为纯文本", action: #selector(menuPastePlain), keyEquivalent: "\r")
         plain.keyEquivalentModifierMask = [.option]
         menu.addItem(.separator())
+        let pv = menu.addItem(withTitle: "预览", action: #selector(menuPreview), keyEquivalent: " ")
+        pv.keyEquivalentModifierMask = []
+        menu.addItem(withTitle: "仅复制（不粘贴）", action: #selector(menuCopyOnly), keyEquivalent: "c")
+        menu.addItem(.separator())
         menu.addItem(withTitle: item.pinned ? "移出常用" : "加入常用", action: #selector(menuTogglePin), keyEquivalent: "p")
         menu.addItem(.separator())
         let del = menu.addItem(withTitle: "删除", action: #selector(menuDelete), keyEquivalent: "\u{8}")
@@ -868,12 +901,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     @objc private func menuPaste() { pasteSelected(plain: Settings.shared.plainTextPaste) }
     @objc private func menuPastePlain() { pasteSelected(plain: true) }
+    @objc private func menuPreview() { togglePreview() }
+    @objc private func menuCopyOnly() { copySelected() }
     @objc private func menuTogglePin() { togglePinSelected() }
     @objc private func menuDelete() { deleteSelected() }
 
     private func moveSelection(_ delta: Int) {
         guard !filtered.isEmpty else { return }
-        selectIndex(max(0, min(filtered.count - 1, selectedIndex + delta)))
+        selectIndex(max(0, min(renderedCount - 1, selectedIndex + delta)))
     }
 
     private func selectIndex(_ i: Int) {
@@ -885,6 +920,16 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         cardViews[i].setSelected(true, focused: true)
         let r = cardViews[i].frame.insetBy(dx: -(gap + pad), dy: 0)
         cardScroll.contentView.scrollToVisible(r)
+        if preview.isVisible, filtered.indices.contains(i) {   // 预览开着：跟随选择切换内容
+            preview.show(filtered[i], above: panel)
+        }
+    }
+
+    /// 空格预览开关（选中项）。
+    private func togglePreview() {
+        if preview.isVisible { preview.hide(); return }
+        guard filtered.indices.contains(selectedIndex) else { return }
+        preview.show(filtered[selectedIndex], above: panel)
     }
 
     private func pasteSelected(plain: Bool) {
@@ -907,6 +952,13 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         }
         hide()
         onPaste?(item, plain)
+    }
+
+    /// ⌘C：只写回剪贴板，不模拟粘贴、不关面板——拿到内容自己找地方粘的路径。
+    private func copySelected() {
+        guard filtered.indices.contains(selectedIndex) else { return }
+        onCopyOnly?(filtered[selectedIndex], Settings.shared.plainTextPaste)
+        showToast("已复制", duration: 2)
     }
 
     private func togglePinSelected() {
@@ -1021,10 +1073,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         pendingSelectID = nil
 
         let q = searchField.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
+        currentQuery = q
         let base = showPinnedOnly ? store.items.filter { $0.pinned } : store.displayItems
         filtered = q.isEmpty ? base : base.filter { $0.matches(q) }   // 子串 + 拼音全拼/首字母
 
-        countLabel.stringValue = filtered.isEmpty ? "" : "\(filtered.count) 条"
+        countLabel.stringValue = filtered.isEmpty ? ""
+            : (filtered.count > Self.renderLimit
+               ? "前 \(Self.renderLimit) · 共 \(filtered.count) 条"
+               : "\(filtered.count) 条")
         emptyLabel.isHidden = !filtered.isEmpty
         if !q.isEmpty {
             emptyLabel.stringValue = "无匹配结果 · esc 清空搜索"
@@ -1035,10 +1091,21 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         }
 
         rebuildCards(keepID: keepID, keepIndex: keepIndex)
+        if preview.isVisible {   // 搜索/切标签后：预览跟随新选中项，无结果则收起
+            if filtered.indices.contains(selectedIndex) { preview.show(filtered[selectedIndex], above: panel) }
+            else { preview.hide() }
+        }
     }
 
     /// 重建代际：分帧补建前校验，防止上一轮的补建批次作用到更晚一次重建上。
     private var rebuildGeneration = 0
+    /// 当前搜索词（已小写去空白），卡片命中高亮用。
+    private var currentQuery = ""
+    /// 面板渲染上限：容量 5000 时全量建卡（每卡约 10 个子视图）会卡在秒级，
+    /// 只渲染前 N 张——没人用方向键翻到第 300 张，长尾靠搜索触达（搜索是全量内存过滤）。
+    private static let renderLimit = 300
+    /// 本轮实际渲染的卡数（选择移动的右边界）。
+    private var renderedCount = 0
 
     private func rebuildCards(keepID: UUID? = nil, keepIndex: Int = 0) {
         rebuildGeneration += 1
@@ -1050,30 +1117,34 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         let scrollW = cardScroll.frame.width
         let cardW = min(260, max(170, (scrollW - pad * 2 - gap * (target - 1)) / target))
 
+        // 渲染上限：只建前 renderLimit 张（长尾靠搜索触达），条数标签会标注「前 N · 共 M」
+        let renderCount = min(filtered.count, Self.renderLimit)
+        renderedCount = renderCount
+
         // 复用卡片视图池：按需补足，多余的先隐藏（搜索清空后免于全量重建），
         // 只有超出硬上限才真正释放。
-        while cardViews.count < filtered.count {
+        while cardViews.count < renderCount {
             let card = ClipCardView()
             cardStrip.addSubview(card)
             cardViews.append(card)
         }
-        for i in filtered.count..<cardViews.count {
+        for i in renderCount..<cardViews.count {
             cardViews[i].isHidden = true
         }
-        // 硬上限只裁剪空闲卡，绝不裁到正在使用的 filtered.count 以内（否则下方 configure 越界）
-        while cardViews.count > max(240, filtered.count) {
+        // 硬上限只裁剪空闲卡，绝不裁到正在渲染的 renderCount 以内（否则下方 configure 越界）
+        while cardViews.count > max(240, renderCount) {
             cardViews.removeLast().removeFromSuperview()
         }
 
         // 分帧构建：本帧只 configure 可视区（约一屏 + 余量），其余下一拍补齐——
         // 全量 configure（文本测量、冷缓存缩略图读盘）会与 140ms 入场动画抢同一帧。
-        let visibleCount = min(filtered.count, Int(ceil(scrollW / (cardW + gap))) + 4)
-        for (i, item) in filtered.enumerated() {
+        let visibleCount = min(renderCount, Int(ceil(scrollW / (cardW + gap))) + 4)
+        for i in 0..<renderCount {
             let card = cardViews[i]
             card.isHidden = false
             card.frame = NSRect(x: pad + CGFloat(i) * (cardW + gap),
                                 y: cardY, width: cardW, height: ClipCardView.cardH)
-            if i < visibleCount { card.configure(item) }
+            if i < visibleCount { card.configure(filtered[i], highlight: currentQuery) }
             let idx = i
             card.onSelect = { [weak self] in self?.selectIndex(idx) }
             card.onActivate = { [weak self] in
@@ -1082,20 +1153,20 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             }
             card.menuProvider = { [weak self] in self?.contextMenu() }
         }
-        let contentW = pad * 2 + CGFloat(filtered.count) * cardW
-            + CGFloat(max(0, filtered.count - 1)) * gap
+        let contentW = pad * 2 + CGFloat(renderCount) * cardW
+            + CGFloat(max(0, renderCount - 1)) * gap
         cardStrip.frame = NSRect(x: 0, y: 0, width: max(contentW, cardScroll.frame.width), height: scrollH)
 
-        if !filtered.isEmpty {
-            // 优先按 id 恢复选中（置顶/撤销后不丢位置）；条目已不在则退到相邻位置。
+        if renderCount > 0 {
+            // 优先按 id 恢复选中（置顶/撤销后不丢位置）；条目已不在或超出渲染区则退到相邻位置。
             let idx: Int
-            if let keepID, let found = filtered.firstIndex(where: { $0.id == keepID }) {
+            if let keepID, let found = filtered.prefix(renderCount).firstIndex(where: { $0.id == keepID }) {
                 idx = found
             } else {
-                idx = max(0, min(keepIndex, filtered.count - 1))
+                idx = max(0, min(keepIndex, renderCount - 1))
             }
             selectedIndex = idx
-            if idx >= visibleCount { cardViews[idx].configure(filtered[idx]) }   // 视区外恢复选中：先建好再高亮
+            if idx >= visibleCount { cardViews[idx].configure(filtered[idx], highlight: currentQuery) }   // 视区外恢复选中：先建好再高亮
             cardViews[idx].setSelected(true, focused: focusZone == .cards)
             if idx == 0 {
                 cardScroll.contentView.scroll(to: .zero)
@@ -1105,11 +1176,11 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         }
 
         // 视区外的卡片下一拍补齐（跳过已建好的选中卡：configure 会重置其选中态）
-        if filtered.count > visibleCount {
+        if renderCount > visibleCount {
             DispatchQueue.main.async { [weak self] in
                 guard let self, generation == self.rebuildGeneration else { return }
-                for i in visibleCount..<self.filtered.count where i != self.selectedIndex {
-                    self.cardViews[i].configure(self.filtered[i])
+                for i in visibleCount..<min(renderCount, self.filtered.count) where i != self.selectedIndex {
+                    self.cardViews[i].configure(self.filtered[i], highlight: self.currentQuery)
                 }
             }
         }
