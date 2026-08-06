@@ -7,8 +7,9 @@ cd "$(dirname "$0")"
 VERSION="${1:?用法: ./release.sh <版本号>  例: ./release.sh 1.4.0}"
 
 # 通用二进制（arm64+x86_64）需完整 Xcode 的 xcbuild；仅命令行工具时退回原生架构。
+# 用 xcodebuild 探测（跟随 xcode-select，兼容 Xcode-<版本>.app 这类非标准安装路径）。
 echo "==> 构建 + 打包 Pasta.app（版本 ${VERSION}）"
-if [[ -x "/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild" ]]; then
+if xcodebuild -version >/dev/null 2>&1; then
   PASTA_VERSION="$VERSION" PASTA_UNIVERSAL=1 ./build.sh
 else
   echo "    (未装完整 Xcode，编原生架构；Intel 用户请从源码构建)"

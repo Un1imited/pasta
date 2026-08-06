@@ -23,7 +23,7 @@ A bottom-docked clipboard history manager for macOS — local, fast, keyboard-fi
 - 🎨 **四套主题皮肤**（午夜青 / 晨光 / 纯墨 / 晶蓝玻璃拟态），全部通过 WCAG AA 对比度
 - 🏷 卡片带**来源 App 图标 + 名称**、相对时间、字符数；图片显示缩略图
 - ⌨️ **键盘全导航**：`←→` 选卡片，`↑↓` 在搜索框 / 标签 / 卡片间切换，`⏎` 粘贴
-- 🔍 即输即搜 + `剪贴板 / 常用` 标签切换
+- 🔍 即输即搜（支持**拼音全拼 / 首字母**：`jtb` 可搜到「剪贴板」）+ `剪贴板 / 常用` 标签切换
 - ⭐ **常用收藏**（`⌘P`）：把要长期留着的记录收进「常用」，**永久不删除**（过期清理不动它）；删除单条 `⌘⌫`、`⌘Z` 撤销；hover 高光、点击 / 双击粘贴
 - 📋 选中后**自动切回原 App 并粘贴**
 - 🧹 **纯文本粘贴**（去格式，`⌥⏎` 或全局开关）+ **历史过期清理**（1 天 / 7 天 / 30 天 / 3 个月 / 6 个月，最长 6 个月）
@@ -47,9 +47,9 @@ open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
 
 ### 方式二 · 下载预编译版
 
-从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-1.4.0.zip`，解压拖到 `/Applications`。
+从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-1.5.0.zip`，解压拖到 `/Applications`。
 
-> 预编译版以 Release 页标注的架构为准（通常为 Apple Silicon arm64）；Intel Mac 请走方式一。
+> 预编译版为通用二进制（Apple Silicon + Intel 均可直接用）。
 >
 > 本项目**未做 Apple 公证**，下载版首次打开会被 Gatekeeper 拦。放行方式：
 > - **macOS 15 (Sequoia) 及以上**：打开被拦后，到 **系统设置 → 隐私与安全性**，页面底部点 **仍要打开**（右键打开的豁免已被系统移除）

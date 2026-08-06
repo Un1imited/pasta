@@ -41,6 +41,10 @@ final class ClipboardStore {
         items = db?.loadAll() ?? []
         purgeExpiredInternal()
         sweepOrphanImages()
+
+        // 拼音索引预热：避免首次搜索时为全部条目同时算拼音卡一拍（NSCache 线程安全）
+        let snapshot = items
+        DispatchQueue.global(qos: .utility).async { snapshot.forEach { _ = $0.pinyinIndex } }
     }
 
     /// 单实例守护：对锁文件加排他 flock。返回 false 表示已有另一个 Pasta
