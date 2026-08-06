@@ -1,11 +1,15 @@
 import AppKit
+import UniformTypeIdentifiers
 
-/// 偏好设置窗口：热键、纯文本粘贴、历史过期。
-final class PreferencesWindowController: NSWindowController {
+/// 偏好设置窗口：热键、纯文本粘贴、历史过期、忽略应用。
+final class PreferencesWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let recorder = HotKeyRecorderButton(frame: NSRect(x: 0, y: 0, width: 200, height: 28))
     private let plainCheck = NSButton(checkboxWithTitle: "粘贴为纯文本（去格式）", target: nil, action: nil)
     private let expirationPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let ignoredTable = NSTableView()
+    private let ignoredButtons = NSSegmentedControl()
+    private var ignoredApps: [String] = []
 
     private let expirationOptions: [(title: String, days: Int)] = [
         ("保留 1 天", 1), ("保留 7 天", 7), ("保留 30 天", 30), ("保留 3 个月", 90), ("保留 6 个月", 180),
@@ -17,7 +21,7 @@ final class PreferencesWindowController: NSWindowController {
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 250),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 396),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -79,7 +83,48 @@ final class PreferencesWindowController: NSWindowController {
         hint.font = .systemFont(ofSize: Typo.caption)
         hint.textColor = .tertiaryLabelColor
 
-        let stack = NSStackView(views: [rowTheme, rowHotkey, rowPlain, rowExpire, hint])
+        // 忽略应用：表格 + 添加/移除按钮
+        let col = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("app"))
+        col.width = 272                      // 撑满滚动区（296 − 滚动条），默认 100 会截断文字
+        ignoredTable.addTableColumn(col)
+        ignoredTable.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+        ignoredTable.headerView = nil
+        ignoredTable.rowHeight = 22
+        ignoredTable.dataSource = self
+        ignoredTable.delegate = self
+        ignoredTable.setAccessibilityLabel("忽略应用列表")
+        let ignoredScroll = NSScrollView()
+        ignoredScroll.documentView = ignoredTable
+        ignoredScroll.hasVerticalScroller = true
+        ignoredScroll.borderType = .bezelBorder
+        ignoredScroll.translatesAutoresizingMaskIntoConstraints = false
+
+        ignoredButtons.segmentStyle = .smallSquare
+        ignoredButtons.trackingMode = .momentary
+        ignoredButtons.segmentCount = 2
+        ignoredButtons.setImage(NSImage(systemSymbolName: "plus", accessibilityDescription: "添加忽略应用"), forSegment: 0)
+        ignoredButtons.setImage(NSImage(systemSymbolName: "minus", accessibilityDescription: "移除选中的忽略应用"), forSegment: 1)
+        ignoredButtons.setWidth(24, forSegment: 0)
+        ignoredButtons.setWidth(24, forSegment: 1)
+        ignoredButtons.target = self
+        ignoredButtons.action = #selector(ignoredButtonsClicked)
+
+        let ignoredHint = NSTextField(wrappingLabelWithString: "从这些 App 复制的内容不记入历史（已有记录不受影响）。适合终端「选中即复制」等场景。")
+        ignoredHint.font = .systemFont(ofSize: Typo.caption)
+        ignoredHint.textColor = .tertiaryLabelColor
+
+        let ignoredBox = NSStackView(views: [ignoredScroll, ignoredButtons, ignoredHint])
+        ignoredBox.orientation = .vertical
+        ignoredBox.spacing = 6
+        ignoredBox.alignment = .leading
+        let rowIgnored = NSStackView(views: [label("忽略应用"), ignoredBox])
+        rowIgnored.orientation = .horizontal
+        rowIgnored.spacing = 12
+        rowIgnored.alignment = .top     // 多行内容：标签对齐首行而非垂直居中
+        rowIgnored.translatesAutoresizingMaskIntoConstraints = false
+        (rowIgnored.views.first as? NSTextField)?.widthAnchor.constraint(equalToConstant: 96).isActive = true
+
+        let stack = NSStackView(views: [rowTheme, rowHotkey, rowPlain, rowExpire, rowIgnored, hint])
         stack.orientation = .vertical
         stack.spacing = 16
         stack.alignment = .leading
@@ -91,6 +136,9 @@ final class PreferencesWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
             recorder.widthAnchor.constraint(equalToConstant: 220),
+            ignoredScroll.widthAnchor.constraint(equalToConstant: 296),
+            ignoredScroll.heightAnchor.constraint(equalToConstant: 84),
+            ignoredHint.widthAnchor.constraint(equalToConstant: 296),
         ])
     }
 
@@ -147,7 +195,74 @@ final class PreferencesWindowController: NSWindowController {
         }
     }
 
+    // MARK: - 忽略应用
+
+    func numberOfRows(in tableView: NSTableView) -> Int { ignoredApps.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard ignoredApps.indices.contains(row) else { return nil }
+        let bid = ignoredApps[row]
+        let cell = NSStackView()
+        cell.orientation = .horizontal
+        cell.spacing = 6
+        cell.edgeInsets = NSEdgeInsets(top: 0, left: 2, bottom: 0, right: 2)
+
+        let iconView = NSImageView()
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        iconView.heightAnchor.constraint(equalToConstant: 16).isActive = true
+
+        let name: String
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bid) {
+            iconView.image = NSWorkspace.shared.icon(forFile: url.path)
+            let display = FileManager.default.displayName(atPath: url.path)
+            name = display.hasSuffix(".app") ? String(display.dropLast(4)) : display
+        } else {
+            iconView.image = NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil)
+            name = bid   // 未安装/已卸载：直接显示 bundle id
+        }
+        let text = NSTextField(labelWithString: name == bid ? bid : "\(name)（\(bid)）")
+        text.font = .systemFont(ofSize: Typo.control)
+        text.lineBreakMode = .byTruncatingMiddle
+        cell.addArrangedSubview(iconView)
+        cell.addArrangedSubview(text)
+        return cell
+    }
+
+    @objc private func ignoredButtonsClicked() {
+        if ignoredButtons.selectedSegment == 0 { addIgnoredApp() } else { removeIgnoredApp() }
+    }
+
+    private func addIgnoredApp() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = true
+        panel.message = "选择要忽略的 App：从它复制的内容不记入历史"
+        panel.prompt = "忽略"
+        panel.beginSheetModal(for: window) { [weak self] resp in
+            guard let self, resp == .OK else { return }
+            for url in panel.urls {
+                guard let bid = Bundle(url: url)?.bundleIdentifier?.lowercased() else { continue }
+                if !self.ignoredApps.contains(bid) { self.ignoredApps.append(bid) }
+            }
+            Settings.shared.ignoredApps = self.ignoredApps
+            self.ignoredTable.reloadData()
+        }
+    }
+
+    private func removeIgnoredApp() {
+        let row = ignoredTable.selectedRow
+        guard ignoredApps.indices.contains(row) else { return }
+        ignoredApps.remove(at: row)
+        Settings.shared.ignoredApps = ignoredApps
+        ignoredTable.reloadData()
+    }
+
     private func loadCurrentValues() {
+        ignoredApps = Settings.shared.ignoredApps
+        ignoredTable.reloadData()
         plainCheck.state = Settings.shared.plainTextPaste ? .on : .off
         let days = Settings.shared.expirationDays
         let idx = expirationOptions.firstIndex { $0.days == days } ?? 0

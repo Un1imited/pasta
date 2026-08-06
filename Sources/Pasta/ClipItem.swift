@@ -60,6 +60,18 @@ struct ClipItem: Codable, Identifiable {
         self.sourceBundleID = sourceBundleID
     }
 
+    /// 从持久层（SQLite）还原：rtf / 图片二进制不随加载常驻内存，用到时按需回读。
+    init(id: UUID, kind: Kind, text: String?, pinned: Bool, date: Date, sourceBundleID: String?) {
+        self.id = id
+        self.kind = kind
+        self.text = text
+        self.rtfData = nil
+        self.imageData = nil
+        self.pinned = pinned
+        self.date = date
+        self.sourceBundleID = sourceBundleID
+    }
+
     // MARK: - Codable（imageData 不编码；解码保留以兼容 v1 内联格式的迁移）
 
     enum CodingKeys: String, CodingKey {
@@ -161,6 +173,14 @@ struct ClipItem: Codable, Identifiable {
         }
     }
 
+    /// 「M月d日」格式化器进程级复用：DateFormatter 创建毫秒级，
+    /// 全量重建卡片时每张旧卡新建一个会直接吃掉入场动画的帧预算。
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M月d日"
+        return f
+    }()
+
     /// 列表右侧显示的相对时间。
     var relativeTime: String {
         let s = Date().timeIntervalSince(date)
@@ -168,9 +188,7 @@ struct ClipItem: Codable, Identifiable {
         if s < 3600 { return "\(Int(s / 60)) 分钟前" }
         if s < 86400 { return "\(Int(s / 3600)) 小时前" }
         if s < 172800 { return "昨天" }
-        let f = DateFormatter()
-        f.dateFormat = "M月d日"
-        return f.string(from: date)
+        return Self.dayFormatter.string(from: date)
     }
 
     /// 图片像素尺寸：用 ImageIO 只读元数据，不整图解码；按 id 缓存。

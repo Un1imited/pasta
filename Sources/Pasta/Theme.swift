@@ -27,6 +27,8 @@ struct Theme {
     let cardShadow: NSColor         // 投影色
     let cardShadowNormal: Float     // 普通投影浓度
     let cardShadowHover: Float       // hover 投影浓度
+    /// 收藏星色：深色主题金黄；浅色主题必须压暗（图形对象 WCAG AA 需 ≥3:1）。
+    var pinColor: NSColor = .systemYellow
 
     /// 非 nil 时面板底改用横向渐变（玻璃拟态）；nil 用纯色 shelfTint。
     var gradient: [NSColor]? = nil
@@ -34,7 +36,7 @@ struct Theme {
 
     // MARK: - 品牌原色（单一事实源）
     /// Pasta 蓝 #189EF2。全部蓝系主题的 accent 从它按明度派生（色相 203° 不变）；
-    /// _design/hero.html、icon-final.html 的强调色与此同源。
+    /// _design/hero.html、icon-v2.html 的强调色与此同源。
     static let brandBlue = NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 1)
 
     // MARK: - 当前主题（卡片视图取色用）
@@ -84,14 +86,15 @@ struct Theme {
         accent: NSColor(srgbRed: 0.069, green: 0.457, blue: 0.700, alpha: 1),   // #1274B2 品牌蓝降明度（白卡上 5.0:1）
         accentGlow: NSColor(srgbRed: 0.069, green: 0.457, blue: 0.700, alpha: 0.55),
         cardBG: NSColor(white: 1, alpha: 1),
-        cardHoverBG: NSColor(white: 1, alpha: 1),
+        cardHoverBG: NSColor(srgbRed: 0.949, green: 0.965, blue: 0.984, alpha: 1),   // #F2F6FB：hover 有底色反馈
         cardFG: NSColor(srgbRed: 0.11, green: 0.11, blue: 0.118, alpha: 1),
         cardDim: NSColor(white: 0, alpha: 0.62),         // 6.2:1
         cardFaint: NSColor(white: 0, alpha: 0.54),       // 4.6:1
         cardBorder: NSColor(srgbRed: 0, green: 0.117, blue: 0.275, alpha: 0.08),
         cardInsetHi: NSColor(white: 1, alpha: 0.9),
         cardShadow: NSColor(srgbRed: 0.078, green: 0.176, blue: 0.333, alpha: 1),
-        cardShadowNormal: 0.18, cardShadowHover: 0.26)
+        cardShadowNormal: 0.18, cardShadowHover: 0.26,
+        pinColor: NSColor(srgbRed: 0.69, green: 0.494, blue: 0, alpha: 1))   // #B07E00 琥珀：白卡上 ≥3:1
 
     // MARK: - 3 · 纯墨（OLED）
     static let ink = Theme(
@@ -111,7 +114,8 @@ struct Theme {
         cardFaint: NSColor(white: 1, alpha: 0.48),       // 4.8:1
         cardBorder: NSColor(white: 1, alpha: 0.05),
         cardInsetHi: NSColor(white: 1, alpha: 0.10),
-        cardShadow: .black, cardShadowNormal: 0.55, cardShadowHover: 0.62)
+        cardShadow: .black, cardShadowNormal: 0.55, cardShadowHover: 0.62,
+        pinColor: NSColor(srgbRed: 0.91, green: 0.788, blue: 0.478, alpha: 1))   // 与 OLED 金 accent 同源，收敛于纯墨的克制气质
 
     // MARK: - 4 · 晶蓝（玻璃拟态）— 深蓝横向渐变底 + 半透玻璃卡
     static let glass = Theme(

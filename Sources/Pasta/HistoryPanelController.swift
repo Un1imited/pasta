@@ -53,7 +53,6 @@ final class ClipCardView: NSView {
         badge.imageScaling = .scaleProportionallyUpOrDown
         pinView.image = NSImage(systemSymbolName: "star.fill", accessibilityDescription: "已收藏")
         pinView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
-        pinView.contentTintColor = .systemYellow
 
         headerLine.boxType = .custom
         headerLine.borderWidth = 0
@@ -156,6 +155,7 @@ final class ClipCardView: NSView {
         bodyText.textColor = theme.cardFG
         srcLabel.textColor = theme.cardDim
         countLabel.textColor = theme.cardFaint
+        pinView.contentTintColor = theme.pinColor
         headerLine.fillColor = theme.cardBorder
         footerLine.fillColor = theme.cardBorder
         topHi.layer?.backgroundColor = theme.cardInsetHi.cgColor
@@ -255,8 +255,8 @@ final class ClipCardView: NSView {
         let ins = Metrics.inset
         // 顶部内高光（横跨上沿，避开圆角）
         topHi.frame = NSRect(x: 8, y: h - 1, width: w - 16, height: 1)
-        // ⌘ 直达编号：左上角浮标
-        indexBadge.frame = NSRect(x: 6, y: h - 22, width: 16, height: 15)
+        // ⌘ 直达编号：浮在卡外左上角（masksToBounds 关闭才画得出），不遮表头文字
+        indexBadge.frame = NSRect(x: -5, y: h - 10, width: 16, height: 15)
         // 表头：meta + 右侧徽标
         badge.frame = NSRect(x: w - ins - 22, y: h - 32, width: 22, height: 22)
         metaLabel.frame = NSRect(x: ins, y: h - 28, width: w - ins - 30 - 8, height: 15)
@@ -382,6 +382,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private var toastTimer: Timer?
     private var toastAction: (() -> Void)?
 
+    /// 最近一次唤起时间：失活收面板的宽限期判定用。
+    private var shownAt = Date.distantPast
     private let shelfHeight: CGFloat = 332
     private let toolbarH = Metrics.toolbarH
     private let gap = Metrics.gap
@@ -394,6 +396,23 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             DispatchQueue.main.async { self?.refilterIfVisible() }
         }
         buildPanel()
+        // App 失活 → 收面板（hidesOnDeactivate 的手动版，走 hide() 正规清理路径）。
+        // 300ms 宽限期：唤起瞬间的激活竞态（协作激活先拒后成 / 前台 App 短暂抢回焦点）
+        // 不应把刚显示的面板收掉。
+        NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification,
+                                               object: nil, queue: .main) { [weak self] _ in
+            guard let self, self.panel.isVisible else { return }
+            if Date().timeIntervalSince(self.shownAt) < 0.3 {
+                // 宽限期内不立即收，稍后复查：竞态失活会在片刻后重新激活（保面板）；
+                // 若确实是用户点走了（始终未激活），补一次正常隐藏。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                    guard let self, self.panel.isVisible, !NSApp.isActive else { return }
+                    self.hide()
+                }
+                return
+            }
+            self.hide()
+        }
         NotificationCenter.default.addObserver(forName: Settings.themeChanged, object: nil, queue: .main) { [weak self] _ in
             self?.applyTheme()
             self?.refilterIfVisible()     // 重建卡片以套用新主题色
@@ -412,7 +431,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         )
         panel.isFloatingPanel = true
         panel.level = .floating
-        panel.hidesOnDeactivate = true
+        // 失活收面板由 didResignActive 手动处理（见 init）：hidesOnDeactivate 会在
+        // macOS 14+ 协作激活「先拒后成」的竞态里把刚唤出的面板立刻收掉（偶发拉起失败），
+        // 且它绕过 hide()，键盘监视器/toast 清理不走正规路径。
+        panel.hidesOnDeactivate = false
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -688,6 +710,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         }
 
         // 先把面板显示出来，让用户立刻看到它。
+        shownAt = Date()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeFirstResponder(searchField)
@@ -719,8 +742,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     // MARK: - 键盘
 
     private func installKeyMonitor() {
-        // 先移除旧监视器再装新的：show() 可能在面板已可见时重入（菜单"显示历史"、
-        // hidesOnDeactivate 自动隐藏后再唤起），否则旧引用丢失永久泄漏且按键被重复处理。
+        // 先移除旧监视器再装新的：show() 可能在面板已可见时重入（菜单"显示历史"重复唤起），
+        // 否则旧引用丢失永久泄漏且按键被重复处理。
         removeKeyMonitor()
         // 按住 ⌘ → hint 栏展开全部快捷键
         flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
@@ -732,8 +755,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            // 面板不可见时放行一切：hidesOnDeactivate 自动隐藏不经过 hide()，
-            // 残留的监视器若继续吞键，会把偏好窗口里的回车变成一次对前台的意外粘贴。
+            // 面板不可见时放行一切（防御性兜底：任何绕过 hide() 的隐藏路径下，
+            // 残留的监视器若继续吞键，会把偏好窗口里的回车变成一次对前台的意外粘贴）。
             guard self.panel.isVisible else { return event }
             // 输入法组词中（拼音等尚未上屏）：整套按键放行给输入法，
             // 否则回车"上屏"会被劫持成粘贴并关面板，组词内容全丢。
@@ -1014,7 +1037,12 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         rebuildCards(keepID: keepID, keepIndex: keepIndex)
     }
 
+    /// 重建代际：分帧补建前校验，防止上一轮的补建批次作用到更晚一次重建上。
+    private var rebuildGeneration = 0
+
     private func rebuildCards(keepID: UUID? = nil, keepIndex: Int = 0) {
+        rebuildGeneration += 1
+        let generation = rebuildGeneration
         let scrollH = cardScroll.frame.height
         let cardY = (scrollH - ClipCardView.cardH) / 2
         // 卡片宽度自适应屏宽：一屏正好显示约 8 个
@@ -1037,12 +1065,15 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             cardViews.removeLast().removeFromSuperview()
         }
 
+        // 分帧构建：本帧只 configure 可视区（约一屏 + 余量），其余下一拍补齐——
+        // 全量 configure（文本测量、冷缓存缩略图读盘）会与 140ms 入场动画抢同一帧。
+        let visibleCount = min(filtered.count, Int(ceil(scrollW / (cardW + gap))) + 4)
         for (i, item) in filtered.enumerated() {
             let card = cardViews[i]
             card.isHidden = false
             card.frame = NSRect(x: pad + CGFloat(i) * (cardW + gap),
                                 y: cardY, width: cardW, height: ClipCardView.cardH)
-            card.configure(item)
+            if i < visibleCount { card.configure(item) }
             let idx = i
             card.onSelect = { [weak self] in self?.selectIndex(idx) }
             card.onActivate = { [weak self] in
@@ -1064,11 +1095,22 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 idx = max(0, min(keepIndex, filtered.count - 1))
             }
             selectedIndex = idx
+            if idx >= visibleCount { cardViews[idx].configure(filtered[idx]) }   // 视区外恢复选中：先建好再高亮
             cardViews[idx].setSelected(true, focused: focusZone == .cards)
             if idx == 0 {
                 cardScroll.contentView.scroll(to: .zero)
             } else {
                 cardScroll.contentView.scrollToVisible(cardViews[idx].frame.insetBy(dx: -(gap + pad), dy: 0))
+            }
+        }
+
+        // 视区外的卡片下一拍补齐（跳过已建好的选中卡：configure 会重置其选中态）
+        if filtered.count > visibleCount {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, generation == self.rebuildGeneration else { return }
+                for i in visibleCount..<self.filtered.count where i != self.selectedIndex {
+                    self.cardViews[i].configure(self.filtered[i])
+                }
             }
         }
     }

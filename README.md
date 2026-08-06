@@ -97,7 +97,7 @@ swift run            # 直接跑
 ./release.sh 1.4.0   # 打包成 dist/Pasta-1.4.0.zip（发布用）
 ```
 
-源码在 `Sources/Pasta/`：AppKit 菜单栏 App，剪贴板轮询、Carbon 全局热键、CGEvent 模拟粘贴、底部卡片栏面板。图标源在 `_design/icon-final.html`。
+源码在 `Sources/Pasta/`：AppKit 菜单栏 App，剪贴板轮询、Carbon 全局热键、CGEvent 模拟粘贴、底部卡片栏面板。图标源在 `_design/icon-v2.html`。
 
 ## License
 
