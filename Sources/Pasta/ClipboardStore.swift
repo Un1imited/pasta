@@ -41,9 +41,13 @@ final class ClipboardStore {
         purgeExpiredInternal()
         sweepOrphanImages()
 
-        // 拼音索引预热：避免首次搜索时为全部条目同时算拼音卡一拍（NSCache 线程安全）
+        // 后台预热：拼音索引（避免首次搜索卡一拍）+ 渲染区内图片的缩略图
+        // （避免首次唤起时面板边建卡边解码；NSCache 线程安全）
         let snapshot = items
-        DispatchQueue.global(qos: .utility).async { snapshot.forEach { _ = $0.pinyinIndex } }
+        DispatchQueue.global(qos: .utility).async {
+            snapshot.forEach { _ = $0.pinyinIndex }
+            snapshot.prefix(300).filter { $0.kind == .image }.prefix(40).forEach { _ = $0.thumbnail }
+        }
 
         // 历史图片的 OCR 回填：逐张排进 OCR 串行低优先级队列（文件读取也在该队列上）
         for id in db?.pendingOCRIDs() ?? [] {

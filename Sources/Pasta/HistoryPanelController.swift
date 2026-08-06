@@ -39,6 +39,8 @@ final class ClipCardView: NSView {
 
     static let cardW: CGFloat = 152
     static let cardH: CGFloat = 212
+    /// 缩略图解码队列：主线程只查缓存，未命中转这里解码后回填。
+    private static let thumbQueue = DispatchQueue(label: "com.local.pasta.thumb", qos: .userInitiated)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: NSRect(x: 0, y: 0, width: Self.cardW, height: Self.cardH))
@@ -118,7 +120,21 @@ final class ClipCardView: NSView {
         if isImage {
             bodyImage.isHidden = false
             bodyText.isHidden = true
-            bodyImage.image = item.thumbnail
+            if let cached = item.cachedThumbnail {
+                bodyImage.image = cached
+            } else {
+                // 缓存未命中：主线程不做磁盘读+解码（这是唤起偶发卡顿的主因之一），
+                // 后台解码完回填；回填前校验卡片没有被复用给别的条目。
+                bodyImage.image = nil
+                let id = item.id
+                Self.thumbQueue.async { [weak self] in
+                    let img = item.thumbnail
+                    DispatchQueue.main.async {
+                        guard let self, self.item?.id == id else { return }
+                        self.bodyImage.image = img
+                    }
+                }
+            }
         } else {
             bodyImage.isHidden = true
             bodyText.isHidden = false
@@ -1189,37 +1205,21 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         let renderCount = min(filtered.count, Self.renderLimit)
         renderedCount = renderCount
 
-        // 复用卡片视图池：按需补足，多余的先隐藏（搜索清空后免于全量重建），
-        // 只有超出硬上限才真正释放。
-        while cardViews.count < renderCount {
-            let card = ClipCardView()
-            cardStrip.addSubview(card)
-            cardViews.append(card)
+        // 池外的旧卡先藏；硬上限只裁空闲卡（搜索清空后免于全量重建）。
+        // 懒建池可能比 renderCount 小（首唤起为空）——dropFirst 越界安全，不能用 ..< 区间。
+        for card in cardViews.dropFirst(renderCount) {
+            card.isHidden = true
         }
-        for i in renderCount..<cardViews.count {
-            cardViews[i].isHidden = true
-        }
-        // 硬上限只裁剪空闲卡，绝不裁到正在渲染的 renderCount 以内（否则下方 configure 越界）
         while cardViews.count > max(240, renderCount) {
             cardViews.removeLast().removeFromSuperview()
         }
 
-        // 分帧构建：本帧只 configure 可视区（约一屏 + 余量），其余下一拍补齐——
-        // 全量 configure（文本测量、冷缓存缩略图读盘）会与 140ms 入场动画抢同一帧。
+        // 懒建 + 分片：本帧只创建/configure 可视区（约一屏 + 余量），其余按 32 张/拍分片补建。
+        // 一次性建 300 个视图（每卡约 10 个子视图）或在同一拍 configure 288 张
+        // （文本测量 + 冷缓存缩略图）都会与 140ms 入场动画抢帧——首唤起偶发卡顿的主因。
         let visibleCount = min(renderCount, Int(ceil(scrollW / (cardW + gap))) + 4)
-        for i in 0..<renderCount {
-            let card = cardViews[i]
-            card.isHidden = false
-            card.frame = NSRect(x: pad + CGFloat(i) * (cardW + gap),
-                                y: cardY, width: cardW, height: ClipCardView.cardH)
-            if i < visibleCount { card.configure(filtered[i], highlight: currentQuery) }
-            let idx = i
-            card.onSelect = { [weak self] in self?.selectIndex(idx) }
-            card.onActivate = { [weak self] in
-                self?.selectIndex(idx)
-                self?.pasteSelected(plain: Settings.shared.plainTextPaste)
-            }
-            card.menuProvider = { [weak self] in self?.contextMenu() }
+        for i in 0..<visibleCount {
+            buildCard(i, cardW: cardW, cardY: cardY, configure: true)
         }
         let contentW = pad * 2 + CGFloat(renderCount) * cardW
             + CGFloat(max(0, renderCount - 1)) * gap
@@ -1234,7 +1234,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 idx = max(0, min(keepIndex, renderCount - 1))
             }
             selectedIndex = idx
-            if idx >= visibleCount { cardViews[idx].configure(filtered[idx], highlight: currentQuery) }   // 视区外恢复选中：先建好再高亮
+            if idx >= visibleCount { buildCard(idx, cardW: cardW, cardY: cardY, configure: true) }   // 视区外恢复选中：先建好再高亮
             cardViews[idx].setSelected(true, focused: focusZone == .cards)
             if idx == 0 {
                 cardScroll.contentView.scroll(to: .zero)
@@ -1243,14 +1243,43 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             }
         }
 
-        // 视区外的卡片下一拍补齐（跳过已建好的选中卡：configure 会重置其选中态）
-        if renderCount > visibleCount {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, generation == self.rebuildGeneration else { return }
-                for i in visibleCount..<min(renderCount, self.filtered.count) where i != self.selectedIndex {
-                    self.cardViews[i].configure(self.filtered[i], highlight: self.currentQuery)
-                }
+        scheduleChunkedBuild(from: visibleCount, to: renderCount,
+                             cardW: cardW, cardY: cardY, generation: generation)
+    }
+
+    /// 补足视图池到第 i 张并布置（frame + 回调），configure 为真时同时填内容。
+    private func buildCard(_ i: Int, cardW: CGFloat, cardY: CGFloat, configure: Bool) {
+        while cardViews.count <= i {
+            let card = ClipCardView()
+            cardStrip.addSubview(card)
+            cardViews.append(card)
+        }
+        let card = cardViews[i]
+        card.isHidden = false
+        card.frame = NSRect(x: pad + CGFloat(i) * (cardW + gap),
+                            y: cardY, width: cardW, height: ClipCardView.cardH)
+        if configure { card.configure(filtered[i], highlight: currentQuery) }
+        let idx = i
+        card.onSelect = { [weak self] in self?.selectIndex(idx) }
+        card.onActivate = { [weak self] in
+            self?.selectIndex(idx)
+            self?.pasteSelected(plain: Settings.shared.plainTextPaste)
+        }
+        card.menuProvider = { [weak self] in self?.contextMenu() }
+    }
+
+    /// 视区外的卡片分片补建：每拍 32 张，代际校验防串批；选中卡跳过（configure 会重置选中态）。
+    private func scheduleChunkedBuild(from start: Int, to end: Int,
+                                      cardW: CGFloat, cardY: CGFloat, generation: Int) {
+        guard start < end else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, generation == self.rebuildGeneration else { return }
+            let chunkEnd = min(start + 32, end, self.filtered.count)
+            for i in start..<chunkEnd where i != self.selectedIndex {
+                self.buildCard(i, cardW: cardW, cardY: cardY, configure: true)
             }
+            self.scheduleChunkedBuild(from: chunkEnd, to: end,
+                                      cardW: cardW, cardY: cardY, generation: generation)
         }
     }
 }
