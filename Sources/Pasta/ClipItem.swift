@@ -315,7 +315,14 @@ struct ClipItem: Codable, Identifiable {
         }
     }
 
+    /// 已缓存的缩略图（只查缓存不解码）：主线程取图用，未命中由调用方转后台解码。
+    var cachedThumbnail: NSImage? {
+        guard kind == .image else { return nil }
+        return ClipCaches.thumbnails.object(forKey: id as NSUUID)
+    }
+
     /// 列表行的缩略图（仅图片有）。用 ImageIO 生成降采样缩略图（不整图解码）并按 id 缓存。
+    /// 含磁盘读取 + 解码，勿在主线程对未缓存的图调用（用 cachedThumbnail 先探）。
     var thumbnail: NSImage? {
         guard kind == .image else { return nil }
         let key = id as NSUUID
