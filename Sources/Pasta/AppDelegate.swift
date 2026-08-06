@@ -215,7 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pb = NSPasteboard.general
         switch item.kind {
         case .text:
-            if !plainText, let rtf = item.rtfData {
+            // rtf 入库后不常驻内存：先取内存（刚复制的在途条目），否则从库回读
+            if !plainText, let rtf = item.rtfData ?? store.rtfData(for: item.id) {
                 pb.clearContents()
                 pb.declareTypes([.rtf, .string], owner: nil)
                 pb.setData(rtf, forType: .rtf)

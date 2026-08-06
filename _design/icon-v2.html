@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+ /* Pasta App Icon v2 ·「层叠卡片」——与菜单栏 icon v1、面板卡片流同构。
+    后卡露出的一角 = 上一条记录：「历史」由构图直接表达，不借 clipboard 公共符号。
+    渐变两端同取品牌蓝 hue 203°（Theme.brandBlue #189ef2）。 */
+ *{margin:0;padding:0;box-sizing:border-box;}
+ html,body{width:1024px;height:1024px;background:transparent;overflow:hidden;}
+ .canvas{width:1024px;height:1024px;position:relative;}
+ /* macOS 图标网格：圆角矩形 824×824，居中留 100 边距 */
+ .squircle{position:absolute;left:100px;top:96px;width:824px;height:824px;border-radius:185px;
+   background:linear-gradient(150deg,#2aa8f7 0%,#0a85d1 100%);
+   box-shadow:0 22px 50px rgba(0,40,90,0.35),inset 0 3px 0 rgba(255,255,255,0.25),inset 0 -10px 30px rgba(0,40,90,0.18);}
+ /* 后卡：露出右上一角，即上一条记录 */
+ .card-back{position:absolute;left:340px;top:220px;width:430px;height:430px;border-radius:96px;
+   background:linear-gradient(160deg,#d7e6f2 0%,#b9cfe2 100%);
+   box-shadow:0 18px 40px rgba(0,40,90,0.22);}
+ /* 前卡：当前这条 */
+ .card-front{position:absolute;left:246px;top:330px;width:460px;height:460px;border-radius:100px;
+   background:#fff;box-shadow:0 30px 60px rgba(0,40,90,0.30),inset 0 2px 0 rgba(255,255,255,0.9);}
+ /* 内容行：一短蓝（品牌蓝）+ 两长灰，沿用既有语言 */
+ .lines{position:absolute;left:330px;top:474px;width:300px;}
+ .lines i{display:block;height:42px;border-radius:21px;margin-bottom:44px;}
+ .lines i:nth-child(1){width:186px;background:#189ef2;}
+ .lines i:nth-child(2){width:292px;background:#aebecb;}
+ .lines i:nth-child(3){width:236px;background:#aebecb;}
+</style></head><body>
+ <div class="canvas">
+   <div class="squircle"></div>
+   <div class="card-back"></div>
+   <div class="card-front"></div>
+   <div class="lines"><i></i><i></i><i></i></div>
+ </div>
+</body></html>

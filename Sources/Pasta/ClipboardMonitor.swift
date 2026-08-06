@@ -38,22 +38,23 @@ final class ClipboardMonitor {
     private func poll() {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
-        guard let item = readPasteboard() else { return }
-        store.add(item)
+        readPasteboard()
     }
 
-    private func readPasteboard() -> ClipItem? {
+    private func readPasteboard() {
         let types = pasteboard.types ?? []
 
         // 跳过密码管理器等标记为「隐藏/瞬态」的内容。
-        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return nil }
-        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return nil }
+        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return }
+        if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
 
         // 复制来源 App（排除我们自己；密码管理器等敏感来源整体跳过）
         var src = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         if src == Bundle.main.bundleIdentifier { src = nil }
         if let s = src?.lowercased(),
-           Self.sensitiveSources.contains(where: { s.hasPrefix($0) }) { return nil }
+           Self.sensitiveSources.contains(where: { s.hasPrefix($0) }) { return }
+        // 用户配置的忽略来源（偏好设置 → 忽略应用）
+        if let s = src?.lowercased(), Settings.shared.ignoredApps.contains(s) { return }
 
         // 1. 文件（Finder 复制）——必须先于文本判断：
         //    Finder 复制文件时剪贴板同时带文件名字符串，文本分支在前会把文件截胡成纯文本。
@@ -61,29 +62,41 @@ final class ClipboardMonitor {
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
             let paths = urls.map { $0.path }.joined(separator: "\n")
-            return ClipItem(kind: .file, text: paths, sourceBundleID: src)
+            store.add(ClipItem(kind: .file, text: paths, sourceBundleID: src))
+            return
         }
 
         // 2. 文本（同时抓取富文本版本，供「保留格式」粘贴用）
         if let str = pasteboard.string(forType: .string),
            !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let rtf = pasteboard.data(forType: .rtf)
-            return ClipItem(kind: .text, text: str, rtfData: rtf, sourceBundleID: src)
+            store.add(ClipItem(kind: .text, text: str, rtfData: rtf, sourceBundleID: src))
+            return
         }
 
-        // 3. 图片
-        if let img = NSImage(pasteboard: pasteboard), let png = img.pngData() {
-            return ClipItem(kind: .image, imageData: png, sourceBundleID: src)
+        // 3. 图片：原始字节在主线程取（剪贴板访问），解码 + PNG 重编码是重活，
+        //    移到后台再回主线程入库——否则复制大图后 0.4s 内唤起面板，
+        //    热键回调会排在整图转码之后，表现为偶发卡顿。
+        let png = pasteboard.data(forType: .png)
+        let tiff = png == nil ? pasteboard.data(forType: .tiff) : nil
+        // 罕见类型（PDF 矢量等）兜底：光栅化仍在主线程，仅此低频路径
+        let rasterized = (png == nil && tiff == nil)
+            ? NSImage(pasteboard: pasteboard)?.tiffRepresentation : nil
+        guard png != nil || tiff != nil || rasterized != nil else { return }
+        let source = src
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let data: Data?
+            if let png {
+                data = png                            // 已是 PNG，零转码
+            } else if let raw = tiff ?? rasterized, let rep = NSBitmapImageRep(data: raw) {
+                data = rep.representation(using: .png, properties: [:])
+            } else {
+                data = nil
+            }
+            guard let self, let data else { return }
+            DispatchQueue.main.async {
+                self.store.add(ClipItem(kind: .image, imageData: data, sourceBundleID: source))
+            }
         }
-
-        return nil
-    }
-}
-
-extension NSImage {
-    func pngData() -> Data? {
-        guard let tiff = tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff) else { return nil }
-        return rep.representation(using: .png, properties: [:])
     }
 }

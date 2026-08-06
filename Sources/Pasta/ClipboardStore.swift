@@ -2,19 +2,24 @@ import AppKit
 
 /// 历史记录的内存模型 + 本地持久化。
 ///
-/// 持久化格式 v2：history.json 只存元数据（带 version 信封），
-/// 图片二进制外置到 images/<id>.png——避免 base64 膨胀与每次保存全量重编码。
-/// v1（无信封的裸数组、图片内联）在 load 时自动迁移，原文件保留 .v1.bak。
+/// 持久化 v3（EcoPaste 同构）：SQLite 存元数据 + rtf（history.db，WAL），
+/// 图片二进制外置 images/<id>.png。内存里只保留展示/搜索所需的元数据，
+/// rtf / 图片入库后即从内存释放，粘贴时按需回读。
+/// v2（history.json + 图片外置）与 v1（裸数组、图片内联）在首启时自动迁移，
+/// 原 JSON 保留为 history.json.v2.bak。
 final class ClipboardStore {
     private(set) var items: [ClipItem] = []
     var onChange: (() -> Void)?
 
-    private let maxItems = 200          // 非置顶记录的上限
+    private let maxItems = 1000         // 非置顶记录上限（v3：SQLite 增量写，上限不再受整文件重写约束）
     private let maxImageBytes = 8 * 1024 * 1024
-    private static let schemaVersion = 2
-    private let fileURL: URL
-    private var saveWork: DispatchWorkItem?
+    private let dbURL: URL
+    private let jsonURL: URL            // 仅迁移用
+    private var db: HistoryDB?
+    /// 所有 DB 写操作的串行队列；读在启动时同步做一次
+    private let dbQueue = DispatchQueue(label: "com.local.pasta.db", qos: .utility)
 
+    /// 迁移解码用（v2 信封格式）
     private struct HistoryFile: Codable {
         var version: Int
         var items: [ClipItem]
@@ -25,15 +30,21 @@ final class ClipboardStore {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Pasta", isDirectory: true)
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        fileURL = support.appendingPathComponent("history.json")
+        dbURL = support.appendingPathComponent("history.db")
+        jsonURL = support.appendingPathComponent("history.json")
         _ = ClipItem.imagesDir                       // 确保图片目录存在
         Self.excludeFromBackup(support)              // 剪贴历史不进 Time Machine：备份会让敏感内容永久化
-        load()
+
+        db = HistoryDB(url: dbURL)
+        if db == nil { NSLog("Pasta: 数据库不可用，本次会话仅内存运行") }
+        migrateFromJSONIfNeeded()
+        items = db?.loadAll() ?? []
         purgeExpiredInternal()
+        sweepOrphanImages()
     }
 
     /// 单实例守护：对锁文件加排他 flock。返回 false 表示已有另一个 Pasta
-    /// （App 或 `swift run`）在运行——双实例会竞写同一份 history.json。
+    /// （App 或 `swift run`）在运行——双实例会竞写同一份历史库。
     static func acquireSingleInstanceLock() -> Bool {
         let dir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -61,19 +72,40 @@ final class ClipboardStore {
             var existing = items.remove(at: idx)
             existing.date = Date()
             items.insert(existing, at: 0)
+            let id = existing.id, date = existing.date
+            dbQueue.async { [weak self] in self?.db?.touch(id: id, date: date) }
         } else {
-            persistImage(of: newItem)
             items.insert(newItem, at: 0)
+            let persisted = newItem      // 值拷贝：带 rtf / 图片二进制进队列
+            dbQueue.async { [weak self] in
+                guard let self else { return }
+                self.persistImage(of: persisted)
+                self.db?.insert(persisted)
+                // 入库后释放内存里的大血包（图片从文件回读、rtf 从库回读）
+                DispatchQueue.main.async { self.freeHeavyBlobs(id: persisted.id) }
+            }
         }
         trim()
-        scheduleSave()
         onChange?()
+    }
+
+    /// 入库完成后释放该条目的 rtf / 图片内存（持久层已可回读）。
+    private func freeHeavyBlobs(id: UUID) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].rtfData = nil
+        items[idx].imageData = nil
+    }
+
+    /// 粘贴「保留格式」时按需回读 rtf（内存里不再常驻）。
+    func rtfData(for id: UUID) -> Data? {
+        dbQueue.sync { db?.rtfData(id: id) }
     }
 
     func togglePin(id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].pinned.toggle()
-        scheduleSave()
+        let pinned = items[idx].pinned
+        dbQueue.async { [weak self] in self?.db?.updatePinned(id: id, pinned: pinned) }
         onChange?()
     }
 
@@ -84,9 +116,11 @@ final class ClipboardStore {
     func delete(id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         if let old = lastDeleted { removeArtifacts(of: old.item) }   // 顶替旧缓冲时才真正清理
-        lastDeleted = (items[idx], idx)
+        var buffered = items[idx]
+        buffered.rtfData = rtfData(for: id)   // 撤销要能整条恢复：删行前先把 rtf 捞回缓冲
+        lastDeleted = (buffered, idx)
         items.remove(at: idx)
-        scheduleSave()
+        dbQueue.async { [weak self] in self?.db?.delete(ids: [id]) }
         onChange?()
     }
 
@@ -96,7 +130,10 @@ final class ClipboardStore {
         guard let (item, idx) = lastDeleted else { return nil }
         lastDeleted = nil
         items.insert(item, at: min(idx, items.count))
-        scheduleSave()
+        dbQueue.async { [weak self] in
+            self?.db?.insert(item)
+            DispatchQueue.main.async { self?.freeHeavyBlobs(id: item.id) }
+        }
         onChange?()
         return item
     }
@@ -110,14 +147,13 @@ final class ClipboardStore {
             removeArtifacts(of: old.item)
             lastDeleted = nil
         }
-        scheduleSave()
+        dbQueue.async { [weak self] in self?.db?.deleteAllUnpinned() }
         onChange?()
     }
 
     /// 按过期设置清理非置顶的旧记录（外部/定时调用，会通知刷新）。
     func purgeExpired() {
         if purgeExpiredInternal() {
-            scheduleSave()
             onChange?()
         }
     }
@@ -131,6 +167,8 @@ final class ClipboardStore {
         guard !expired.isEmpty else { return false }
         items.removeAll { !$0.pinned && $0.date < cutoff }
         expired.forEach(removeArtifacts)
+        let ids = expired.map { $0.id }
+        dbQueue.async { [weak self] in self?.db?.delete(ids: ids) }
         return true
     }
 
@@ -143,7 +181,15 @@ final class ClipboardStore {
             dropped.append(item)
             return false
         }
+        guard !dropped.isEmpty else { return }
         dropped.forEach(removeArtifacts)
+        let ids = dropped.map { $0.id }
+        dbQueue.async { [weak self] in self?.db?.delete(ids: ids) }
+    }
+
+    /// 退出前排空在途的数据库写（每笔写本就即时提交，这里只等队列清空）。
+    func flush() {
+        dbQueue.sync {}
     }
 
     // MARK: - 图片文件
@@ -177,60 +223,32 @@ final class ClipboardStore {
         }
     }
 
-    // MARK: - 持久化
+    // MARK: - v1/v2 → v3 迁移
 
-    /// 写盘合并：0.5s 内的连续变更只落一次盘（复制高峰时避免每次全量重写）。
-    private func scheduleSave() {
-        saveWork?.cancel()
-        let w = DispatchWorkItem { [weak self] in
-            self?.saveNow()
-            self?.saveWork = nil
-        }
-        saveWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: w)
-    }
-
-    /// 立即落盘挂起的变更（App 退出前调用）。
-    func flush() {
-        guard saveWork != nil else { return }
-        saveWork?.cancel()
-        saveWork = nil
-        saveNow()
-    }
-
-    private func saveNow() {
-        do {
-            let data = try JSONEncoder().encode(HistoryFile(version: Self.schemaVersion, items: items))
-            try data.write(to: fileURL, options: .atomic)
-            // 剪贴历史可能含敏感文本：仅本用户可读
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
-        } catch {
-            NSLog("Pasta: 保存历史失败 \(error)")
-        }
-    }
-
-    private func load() {
-        guard let data = try? Data(contentsOf: fileURL) else { return }
+    /// 库为空且存在 history.json 时执行一次性迁移；原文件保留 .v2.bak 供回滚。
+    /// v1（裸数组、图片内联）与 v2（信封、图片外置）都能吃。
+    private func migrateFromJSONIfNeeded() {
+        guard let db, db.isEmpty,
+              let data = try? Data(contentsOf: jsonURL) else { return }
         let dec = JSONDecoder()
+        let migrated: [ClipItem]
         if let file = try? dec.decode(HistoryFile.self, from: data) {
-            items = file.items
+            migrated = file.items
         } else if let legacy = try? dec.decode([ClipItem].self, from: data) {
-            // v1 → v2 迁移：内联图片落盘为独立文件；原文件保留 .v1.bak 供回滚
-            try? FileManager.default.copyItem(at: fileURL, to: fileURL.appendingPathExtension("v1.bak"))
-            items = legacy
-            for item in items where item.kind == .image { persistImage(of: item) }
-            saveNow()
-            NSLog("Pasta: 历史已从 v1 迁移到 v2（图片外置；原文件保留为 history.json.v1.bak）")
+            migrated = legacy
         } else {
-            // 损坏：保留现场，绝不让下一次 save 覆盖掉用户的历史。
-            // 此时 items 为空，绝不能跑孤儿清扫——否则会把现场 json 引用的全部图片删光。
+            // 损坏：保留现场，从空库启动；不动图片目录（现场 json 可能还引用它们）
             let ts = Int(Date().timeIntervalSince1970)
-            let corrupt = fileURL.appendingPathExtension("corrupt-\(ts)")
-            try? FileManager.default.moveItem(at: fileURL, to: corrupt)
-            NSLog("Pasta: history.json 解码失败，已保留现场为 \(corrupt.lastPathComponent)，从空历史启动")
+            try? FileManager.default.moveItem(at: jsonURL, to: jsonURL.appendingPathExtension("corrupt-\(ts)"))
+            NSLog("Pasta: history.json 解码失败，已保留现场，从空库启动")
             return
         }
-        sweepOrphanImages()
+        for item in migrated {
+            if item.kind == .image, item.imageData != nil { persistImage(of: item) }  // v1 内联图片落盘
+            db.insert(item)
+        }
+        try? FileManager.default.moveItem(at: jsonURL, to: jsonURL.appendingPathExtension("v2.bak"))
+        NSLog("Pasta: 历史已迁移到 SQLite（\(migrated.count) 条；原 JSON 保留为 history.json.v2.bak）")
     }
 
     private static func excludeFromBackup(_ url: URL) {

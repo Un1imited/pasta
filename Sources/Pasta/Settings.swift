@@ -19,6 +19,7 @@ final class Settings {
         static let expirationDays = "expirationDays"
         static let themeID = "themeID"
         static let hasCompletedFirstRun = "hasCompletedFirstRun"
+        static let ignoredApps = "ignoredApps"
     }
 
     private init() {
@@ -70,6 +71,16 @@ final class Settings {
     var plainTextPaste: Bool {
         get { defaults.bool(forKey: K.plainTextPaste) }
         set { defaults.set(newValue, forKey: K.plainTextPaste) }
+    }
+
+    // MARK: - 忽略来源 App
+
+    /// 忽略的来源 App（bundle id，小写存储）：前台是这些 App 时剪贴板变更不入历史。
+    /// 典型场景：终端「选中即复制」（iTerm2 / PyCharm 终端）持续污染历史。
+    /// 只影响之后的记录，已有历史不动。
+    var ignoredApps: [String] {
+        get { defaults.stringArray(forKey: K.ignoredApps) ?? [] }
+        set { defaults.set(newValue.map { $0.lowercased() }, forKey: K.ignoredApps) }
     }
 
     // MARK: - 过期清理
