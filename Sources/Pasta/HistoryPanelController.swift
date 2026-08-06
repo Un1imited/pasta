@@ -1022,7 +1022,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         let q = searchField.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
         let base = showPinnedOnly ? store.items.filter { $0.pinned } : store.displayItems
-        filtered = q.isEmpty ? base : base.filter { $0.searchText.lowercased().contains(q) }
+        filtered = q.isEmpty ? base : base.filter { $0.matches(q) }   // 子串 + 拼音全拼/首字母
 
         countLabel.stringValue = filtered.isEmpty ? "" : "\(filtered.count) 条"
         emptyLabel.isHidden = !filtered.isEmpty
