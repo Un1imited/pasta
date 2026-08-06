@@ -33,6 +33,9 @@ final class ClipCardView: NSView {
     private var selFocused = true        // 卡片区是否为当前焦点区（false 时蓝框降级为灰框）
     private var hovering = false
     private var trackingArea: NSTrackingArea?
+    private var item: ClipItem?          // 拖出（drag-out）取内容用
+    private var mouseDownEvent: NSEvent?
+    private var dragStarted = false
 
     static let cardW: CGFloat = 152
     static let cardH: CGFloat = 212
@@ -100,6 +103,7 @@ final class ClipCardView: NSView {
         indexBadge.isHidden = true
         isImage = item.kind == .image
         theme = Theme.current
+        self.item = item                 // 拖出用（值拷贝，重血包已外置不占内存）
         countLabel.stringValue = item.footerInfo
         srcLabel.stringValue = item.sourceAppName ?? ""
         pinView.isHidden = !item.pinned
@@ -318,7 +322,63 @@ final class ClipCardView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        mouseDownEvent = event
+        dragStarted = false
         if event.clickCount >= 2 { onActivate?() } else { onSelect?() }
+    }
+
+    // MARK: - 拖出（drag-out）
+
+    /// 按下后拖动超过阈值 → 开始拖拽会话：文本拖字符串、文件拖真实 URL、
+    /// 图片写友好命名的临时 PNG 再拖（直接拖 images/<uuid>.png 落到 Finder 名字太丑）。
+    override func mouseDragged(with event: NSEvent) {
+        guard !dragStarted, let down = mouseDownEvent else { return }
+        let dist = hypot(event.locationInWindow.x - down.locationInWindow.x,
+                         event.locationInWindow.y - down.locationInWindow.y)
+        guard dist > 5 else { return }
+        dragStarted = true
+        let writers = dragWriters()
+        guard !writers.isEmpty else { return }
+        let snapshot = cardSnapshot()
+        let dragItems = writers.map { w -> NSDraggingItem in
+            let di = NSDraggingItem(pasteboardWriter: w)
+            di.setDraggingFrame(bounds, contents: snapshot)
+            return di
+        }
+        beginDraggingSession(with: dragItems, event: down, source: self)
+    }
+
+    private func dragWriters() -> [NSPasteboardWriting] {
+        guard let item else { return [] }
+        switch item.kind {
+        case .text:
+            let t = item.text ?? ""
+            return t.isEmpty ? [] : [t as NSString]
+        case .file:
+            // 原始路径还在就拖真实文件（多文件全带上）；失效则退回路径文本
+            let urls = (item.text ?? "").split(separator: "\n")
+                .map { URL(fileURLWithPath: String($0)) }
+                .filter { FileManager.default.fileExists(atPath: $0.path) }
+            if !urls.isEmpty { return urls.map { $0 as NSURL } }
+            let t = item.text ?? ""
+            return t.isEmpty ? [] : [t as NSString]
+        case .image:
+            guard let data = item.imageBytes else { return [] }
+            let df = DateFormatter(); df.dateFormat = "yyyyMMdd-HHmmss"
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("Pasta 图片 \(df.string(from: item.date)).png")
+            guard (try? data.write(to: tmp, options: .atomic)) != nil else { return [] }
+            return [tmp as NSURL]
+        }
+    }
+
+    /// 卡片自身的视觉快照作拖拽图像。
+    private func cardSnapshot() -> NSImage? {
+        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
+        cacheDisplay(in: bounds, to: rep)
+        let img = NSImage(size: bounds.size)
+        img.addRepresentation(rep)
+        return img
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -329,6 +389,14 @@ final class ClipCardView: NSView {
     /// 让卡片内任意位置（含文字/图片子视图）的点击都落到卡片本身。
     override func hitTest(_ point: NSPoint) -> NSView? {
         return super.hitTest(point) != nil ? self : nil
+    }
+}
+
+extension ClipCardView: NSDraggingSource {
+    func draggingSession(_ session: NSDraggingSession,
+                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        // 只允许拖出到其他 App（复制语义）；面板内部不做拖放排序
+        context == .outsideApplication ? .copy : []
     }
 }
 
