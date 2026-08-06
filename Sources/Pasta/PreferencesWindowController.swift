@@ -6,13 +6,21 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     private let recorder = HotKeyRecorderButton(frame: NSRect(x: 0, y: 0, width: 200, height: 28))
     private let plainCheck = NSButton(checkboxWithTitle: "粘贴为纯文本（去格式）", target: nil, action: nil)
     private let expirationPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let limitPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let themePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let ignoredTable = NSTableView()
     private let ignoredButtons = NSSegmentedControl()
+    private let remoteCheck = NSButton(checkboxWithTitle: "忽略来自 iPhone / iPad 的接力内容", target: nil, action: nil)
+    private let autoBackupCheck = NSButton(checkboxWithTitle: "每天自动备份（滚动保留 3 份）", target: nil, action: nil)
+    private let autoBackupPathLabel = NSTextField(labelWithString: "未选择目录")
     private var ignoredApps: [String] = []
 
     private let expirationOptions: [(title: String, days: Int)] = [
         ("保留 1 天", 1), ("保留 7 天", 7), ("保留 30 天", 30), ("保留 3 个月", 90), ("保留 6 个月", 180),
+    ]
+
+    private let limitOptions: [(title: String, count: Int)] = [
+        ("500 条", 500), ("1000 条", 1000), ("2000 条", 2000), ("5000 条", 5000),
     ]
 
     /// 主题下拉的选项：跟随系统 + 全部具名主题。
@@ -21,7 +29,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 396),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 528),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -55,6 +63,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         let rowHotkey = NSStackView(views: [label("唤起快捷键"), recorder])
         let rowPlain = NSStackView(views: [label("粘贴方式"), plainCheck])
         let rowExpire = NSStackView(views: [label("历史保留"), expirationPopup])
+        let rowLimit = NSStackView(views: [label("历史容量"), limitPopup])
 
         for (id, name) in themeOptions {
             themePopup.addItem(withTitle: name)
@@ -68,10 +77,13 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         for option in expirationOptions { expirationPopup.addItem(withTitle: option.title) }
         expirationPopup.target = self
         expirationPopup.action = #selector(expirationChanged)
+        for option in limitOptions { limitPopup.addItem(withTitle: option.title) }
+        limitPopup.target = self
+        limitPopup.action = #selector(limitChanged)
         plainCheck.target = self
         plainCheck.action = #selector(plainChanged)
 
-        for row in [rowTheme, rowHotkey, rowPlain, rowExpire] {
+        for row in [rowTheme, rowHotkey, rowPlain, rowExpire, rowLimit] {
             row.orientation = .horizontal
             row.spacing = 12
             row.alignment = .centerY
@@ -113,7 +125,33 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         ignoredHint.font = .systemFont(ofSize: Typo.caption)
         ignoredHint.textColor = .tertiaryLabelColor
 
-        let ignoredBox = NSStackView(views: [ignoredScroll, ignoredButtons, ignoredHint])
+        remoteCheck.target = self
+        remoteCheck.action = #selector(remoteChanged)
+
+        // 自动备份：开关 + 目录选择 + 当前路径
+        autoBackupCheck.target = self
+        autoBackupCheck.action = #selector(autoBackupToggled)
+        let chooseBtn = NSButton(title: "选择目录…", target: self, action: #selector(chooseBackupDir))
+        chooseBtn.bezelStyle = .rounded
+        chooseBtn.controlSize = .small
+        autoBackupPathLabel.font = .systemFont(ofSize: Typo.caption)
+        autoBackupPathLabel.textColor = .tertiaryLabelColor
+        autoBackupPathLabel.lineBreakMode = .byTruncatingMiddle
+        let backupLine = NSStackView(views: [autoBackupCheck, chooseBtn])
+        backupLine.orientation = .horizontal
+        backupLine.spacing = 8
+        let backupBox = NSStackView(views: [backupLine, autoBackupPathLabel])
+        backupBox.orientation = .vertical
+        backupBox.spacing = 4
+        backupBox.alignment = .leading
+        let rowBackup = NSStackView(views: [label("自动备份"), backupBox])
+        rowBackup.orientation = .horizontal
+        rowBackup.spacing = 12
+        rowBackup.alignment = .top
+        rowBackup.translatesAutoresizingMaskIntoConstraints = false
+        (rowBackup.views.first as? NSTextField)?.widthAnchor.constraint(equalToConstant: 96).isActive = true
+
+        let ignoredBox = NSStackView(views: [ignoredScroll, ignoredButtons, ignoredHint, remoteCheck])
         ignoredBox.orientation = .vertical
         ignoredBox.spacing = 6
         ignoredBox.alignment = .leading
@@ -124,7 +162,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         rowIgnored.translatesAutoresizingMaskIntoConstraints = false
         (rowIgnored.views.first as? NSTextField)?.widthAnchor.constraint(equalToConstant: 96).isActive = true
 
-        let stack = NSStackView(views: [rowTheme, rowHotkey, rowPlain, rowExpire, rowIgnored, hint])
+        let stack = NSStackView(views: [rowTheme, rowHotkey, rowPlain, rowExpire, rowLimit, rowBackup, rowIgnored, hint])
         stack.orientation = .vertical
         stack.spacing = 16
         stack.alignment = .leading
@@ -139,6 +177,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             ignoredScroll.widthAnchor.constraint(equalToConstant: 296),
             ignoredScroll.heightAnchor.constraint(equalToConstant: 84),
             ignoredHint.widthAnchor.constraint(equalToConstant: 296),
+            autoBackupPathLabel.widthAnchor.constraint(equalToConstant: 296),
         ])
     }
 
@@ -260,13 +299,44 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         ignoredTable.reloadData()
     }
 
+    @objc private func remoteChanged() {
+        Settings.shared.ignoreRemoteClipboard = (remoteCheck.state == .on)
+    }
+
+    @objc private func autoBackupToggled() {
+        Settings.shared.autoBackupEnabled = (autoBackupCheck.state == .on)
+        // 开了开关还没选目录：直接弹目录选择，别留半配置状态
+        if Settings.shared.autoBackupEnabled, Settings.shared.autoBackupDir == nil { chooseBackupDir() }
+    }
+
+    @objc private func chooseBackupDir() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "选择"
+        panel.message = "选择自动备份目录（每天一份，滚动保留 3 份）"
+        panel.beginSheetModal(for: window) { [weak self] resp in
+            guard let self, resp == .OK, let url = panel.url else { return }
+            Settings.shared.autoBackupDir = url.path
+            self.autoBackupPathLabel.stringValue = url.path
+        }
+    }
+
     private func loadCurrentValues() {
         ignoredApps = Settings.shared.ignoredApps
         ignoredTable.reloadData()
+        remoteCheck.state = Settings.shared.ignoreRemoteClipboard ? .on : .off
+        autoBackupCheck.state = Settings.shared.autoBackupEnabled ? .on : .off
+        autoBackupPathLabel.stringValue = Settings.shared.autoBackupDir ?? "未选择目录"
         plainCheck.state = Settings.shared.plainTextPaste ? .on : .off
         let days = Settings.shared.expirationDays
         let idx = expirationOptions.firstIndex { $0.days == days } ?? 0
         expirationPopup.selectItem(at: idx)
+        let limit = Settings.shared.maxHistoryItems
+        let lIdx = limitOptions.firstIndex { $0.count == limit } ?? (limitOptions.count - 1)
+        limitPopup.selectItem(at: lIdx)
         let tIdx = themeOptions.firstIndex { $0.id == Settings.shared.themeID } ?? 1  // 找不到时退到午夜青
         themePopup.selectItem(at: tIdx)
     }
@@ -285,5 +355,11 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         let idx = expirationPopup.indexOfSelectedItem
         guard expirationOptions.indices.contains(idx) else { return }
         Settings.shared.expirationDays = expirationOptions[idx].days
+    }
+
+    @objc private func limitChanged() {
+        let idx = limitPopup.indexOfSelectedItem
+        guard limitOptions.indices.contains(idx) else { return }
+        Settings.shared.maxHistoryItems = limitOptions[idx].count
     }
 }

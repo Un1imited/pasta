@@ -47,6 +47,10 @@ final class ClipboardMonitor {
         // 跳过密码管理器等标记为「隐藏/瞬态」的内容。
         if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return }
         if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
+        // 接力（通用剪贴板）：iPhone/iPad 复制的内容默认不记——
+        // iOS 端的 Concealed 标记不会跨设备传递，接力是敏感内容进历史的旁路（偏好可关）。
+        if Settings.shared.ignoreRemoteClipboard,
+           types.contains(NSPasteboard.PasteboardType("com.apple.is-remote-clipboard")) { return }
 
         // 复制来源 App（排除我们自己；密码管理器等敏感来源整体跳过）
         var src = NSWorkspace.shared.frontmostApplication?.bundleIdentifier

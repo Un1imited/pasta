@@ -11,7 +11,6 @@ final class ClipboardStore {
     private(set) var items: [ClipItem] = []
     var onChange: (() -> Void)?
 
-    private let maxItems = 1000         // 非置顶记录上限（v3：SQLite 增量写，上限不再受整文件重写约束）
     private let maxImageBytes = 8 * 1024 * 1024
     private let dbURL: URL
     private let jsonURL: URL            // 仅迁移用
@@ -45,6 +44,31 @@ final class ClipboardStore {
         // 拼音索引预热：避免首次搜索时为全部条目同时算拼音卡一拍（NSCache 线程安全）
         let snapshot = items
         DispatchQueue.global(qos: .utility).async { snapshot.forEach { _ = $0.pinyinIndex } }
+
+        // 历史图片的 OCR 回填：逐张排进 OCR 串行低优先级队列（文件读取也在该队列上）
+        for id in db?.pendingOCRIDs() ?? [] {
+            if let item = items.first(where: { $0.id == id }) { scheduleOCR(for: item) }
+        }
+    }
+
+    // MARK: - OCR（图片文字进搜索索引）
+
+    /// 图片入库/回填时排一次本地文字识别；识别到内容才更新（无文字的图不反复重试本次会话内已处理）。
+    private func scheduleOCR(for item: ClipItem) {
+        guard item.kind == .image else { return }
+        let id = item.id
+        let mem = item.imageData
+        let file = item.imageFileURL
+        OCRService.recognize(provider: { mem ?? (try? Data(contentsOf: file)) }) { [weak self] text in
+            guard let text else { return }
+            DispatchQueue.main.async { self?.applyOCR(id: id, text: text) }
+        }
+    }
+
+    private func applyOCR(id: UUID, text: String) {
+        if let idx = items.firstIndex(where: { $0.id == id }) { items[idx].ocrText = text }
+        ClipItem.purgeSearchIndex(id: id)   // searchText 变了，重建拼音索引
+        dbQueue.async { [weak self] in self?.db?.updateOCR(id: id, text: text) }
     }
 
     /// 单实例守护：对锁文件加排他 flock。返回 false 表示已有另一个 Pasta
@@ -88,6 +112,7 @@ final class ClipboardStore {
                 // 入库后释放内存里的大血包（图片从文件回读、rtf 从库回读）
                 DispatchQueue.main.async { self.freeHeavyBlobs(id: persisted.id) }
             }
+            scheduleOCR(for: newItem)   // 图片：本地文字识别进搜索索引
         }
         trim()
         onChange?()
@@ -176,12 +201,20 @@ final class ClipboardStore {
         return true
     }
 
+    /// 容量设置变更后按新上限收缩（AppDelegate 监听设置变化调用）。
+    func applyHistoryLimit() {
+        let before = items.count
+        trim()
+        if items.count != before { onChange?() }
+    }
+
     private func trim() {
+        let limit = Settings.shared.maxHistoryItems   // 非收藏上限（偏好可调 500–5000）
         var kept = 0
         var dropped: [ClipItem] = []
         items = items.filter { item in
             if item.pinned { return true }
-            if kept < maxItems { kept += 1; return true }
+            if kept < limit { kept += 1; return true }
             dropped.append(item)
             return false
         }
@@ -195,6 +228,84 @@ final class ClipboardStore {
     func flush() {
         dbQueue.sync {}
     }
+
+    // MARK: - 备份导出 / 导入
+
+    /// 导出备份 zip：history.db（checkpoint 后的完整单文件）+ images/ 目录。
+    func exportBackup(to dest: URL) throws {
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PastaBackup-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+
+        try dbQueue.sync {
+            db?.checkpoint()   // WAL 合并回主文件，单个 .db 即完整数据
+            try FileManager.default.copyItem(at: dbURL, to: staging.appendingPathComponent("history.db"))
+        }
+        try FileManager.default.copyItem(at: ClipItem.imagesDir,
+                                         to: staging.appendingPathComponent("images"))
+
+        try? FileManager.default.removeItem(at: dest)
+        let ditto = Process()
+        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        ditto.arguments = ["-c", "-k", staging.path, dest.path]
+        try ditto.run()
+        ditto.waitUntilExit()
+        guard ditto.terminationStatus == 0 else {
+            throw NSError(domain: "Pasta", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "压缩备份失败（ditto 退出码 \(ditto.terminationStatus)）"])
+        }
+    }
+
+    /// 导入备份 zip：按 id 合并（已存在的记录跳过，不覆盖现有历史），图片文件补拷贝。
+    /// 返回新增条数。
+    func importBackup(from zip: URL) throws -> Int {
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PastaRestore-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: staging) }
+
+        let ditto = Process()
+        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        ditto.arguments = ["-x", "-k", zip.path, staging.path]
+        try ditto.run()
+        ditto.waitUntilExit()
+        guard ditto.terminationStatus == 0 else {
+            throw NSError(domain: "Pasta", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "解压失败：不是有效的 zip 文件"])
+        }
+        let srcDB = staging.appendingPathComponent("history.db")
+        guard FileManager.default.fileExists(atPath: srcDB.path) else {
+            throw NSError(domain: "Pasta", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "备份包里没有 history.db——不是 Pasta 备份"])
+        }
+
+        let added = dbQueue.sync { db?.merge(from: srcDB.path) ?? 0 }
+
+        // 图片：只补缺，不覆盖本机已有文件
+        let srcImages = staging.appendingPathComponent("images")
+        if let files = try? FileManager.default.contentsOfDirectory(at: srcImages, includingPropertiesForKeys: nil) {
+            for f in files where f.pathExtension == "png" {
+                let target = ClipItem.imagesDir.appendingPathComponent(f.lastPathComponent)
+                if !FileManager.default.fileExists(atPath: target.path) {
+                    try? FileManager.default.copyItem(at: f, to: target)
+                    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+                }
+            }
+        }
+
+        // 重载内存模型（保序去重后的全量），面板经 onChange 刷新
+        items = dbQueue.sync { db?.loadAll() ?? [] }
+        trim()
+        onChange?()
+        // 旧备份合并进来的图片可能没有 OCR：补排识别
+        for id in dbQueue.sync(execute: { db?.pendingOCRIDs() ?? [] }) {
+            if let item = items.first(where: { $0.id == id }) { scheduleOCR(for: item) }
+        }
+        return added
+    }
+
+    /// 自动备份的当前记录数（AppDelegate 提示用）。
+    var count: Int { items.count }
 
     // MARK: - 图片文件
 

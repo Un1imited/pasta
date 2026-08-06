@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = ClipboardStore()
@@ -57,8 +58,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             self?.store.purgeExpired()
         }
+        // 历史容量：调小后立即按新上限收缩
+        NotificationCenter.default.addObserver(
+            forName: Settings.historyLimitChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.store.applyHistoryLimit()
+        }
         expirationTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
             self?.store.purgeExpired()
+            self?.autoBackupIfDue()
+        }
+        // 启动 1 分钟后补一次到期检查（比如隔了几天没开机）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            self?.autoBackupIfDue()
         }
 
         // 权限申请刻意不在启动时做：启动即弹系统授权吓人且归因不明。
@@ -131,8 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(plainItem)
 
         menu.addItem(withTitle: "偏好设置…", action: #selector(openPreferences), keyEquivalent: ",")
+        menu.addItem(withTitle: "检查更新…", action: #selector(checkForUpdates), keyEquivalent: "")
         menu.addItem(.separator())
 
+        menu.addItem(withTitle: "导出历史备份…", action: #selector(exportBackup), keyEquivalent: "")
+        menu.addItem(withTitle: "导入历史备份…", action: #selector(importBackup), keyEquivalent: "")
         menu.addItem(withTitle: "清空历史（保留常用）", action: #selector(clearHistory), keyEquivalent: "")
 
         launchItem = NSMenuItem(title: "开机自启", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
@@ -170,6 +185,125 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPreferences() { preferences.showCentered() }
+
+    // MARK: - 备份
+
+    @objc private func exportBackup() {
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSSavePanel()
+        let df = DateFormatter(); df.dateFormat = "yyyyMMdd"
+        panel.nameFieldStringValue = "Pasta-备份-\(df.string(from: Date())).zip"
+        panel.allowedContentTypes = [.zip]
+        panel.begin { [weak self] resp in
+            guard let self, resp == .OK, let url = panel.url else { return }
+            do {
+                try self.store.exportBackup(to: url)
+                self.backupAlert("备份已导出", "共 \(self.store.items.count) 条记录（含图片）。\n文件：\(url.lastPathComponent)")
+            } catch {
+                self.backupAlert("导出失败", error.localizedDescription, style: .warning)
+            }
+        }
+    }
+
+    @objc private func importBackup() {
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.zip]
+        panel.message = "选择 Pasta 备份 zip：按记录合并导入，不会覆盖现有历史"
+        panel.prompt = "导入"
+        panel.begin { [weak self] resp in
+            guard let self, resp == .OK, let url = panel.url else { return }
+            do {
+                let added = try self.store.importBackup(from: url)
+                self.backupAlert("导入完成", added > 0 ? "新增 \(added) 条记录（重复记录已跳过）。" : "没有新增记录——备份内容与现有历史完全重合。")
+            } catch {
+                self.backupAlert("导入失败", error.localizedDescription, style: .warning)
+            }
+        }
+    }
+
+    private func backupAlert(_ title: String, _ text: String, style: NSAlert.Style = .informational) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.alertStyle = style
+        alert.runModal()
+    }
+
+    /// 每日自动备份：开关 + 目录都设好、距上次 ≥ 23 小时才执行；滚动保留最近 3 份。
+    private func autoBackupIfDue() {
+        guard Settings.shared.autoBackupEnabled,
+              let dirPath = Settings.shared.autoBackupDir else { return }
+        guard Date().timeIntervalSince(Settings.shared.lastAutoBackupAt) >= 23 * 3600 else { return }
+        let dir = URL(fileURLWithPath: dirPath, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dir.path) else {
+            NSLog("Pasta: 自动备份目录不存在，跳过：\(dirPath)")
+            return
+        }
+        Settings.shared.lastAutoBackupAt = Date()   // 先记时间：失败也不在同一小时内反复重试
+        let df = DateFormatter(); df.dateFormat = "yyyyMMdd-HHmm"
+        let dest = dir.appendingPathComponent("Pasta-自动备份-\(df.string(from: Date())).zip")
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self else { return }
+            do {
+                try self.store.exportBackup(to: dest)
+                // 滚动清理：只留最近 3 份自动备份
+                let files = ((try? FileManager.default.contentsOfDirectory(
+                    at: dir, includingPropertiesForKeys: nil)) ?? [])
+                    .filter { $0.lastPathComponent.hasPrefix("Pasta-自动备份-") && $0.pathExtension == "zip" }
+                    .sorted { $0.lastPathComponent > $1.lastPathComponent }
+                for old in files.dropFirst(3) { try? FileManager.default.removeItem(at: old) }
+                NSLog("Pasta: 自动备份完成 → \(dest.lastPathComponent)")
+            } catch {
+                NSLog("Pasta: 自动备份失败 \(error)")
+            }
+        }
+    }
+
+    // MARK: - 检查更新（手动触发才发网络请求，遵守「无后台网络」承诺）
+
+    @objc private func checkForUpdates() {
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+        let url = URL(string: "https://api.github.com/repos/Un1imited/pasta/releases/latest")!
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                guard error == nil, let data,
+                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let tag = obj["tag_name"] as? String else {
+                    self.backupAlert("检查更新失败", "无法连接 GitHub，请稍后再试或直接访问 Releases 页。", style: .warning)
+                    return
+                }
+                let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+                if Self.isVersion(latest, newerThan: current) {
+                    let alert = NSAlert()
+                    alert.messageText = "有新版本 \(latest)"
+                    alert.informativeText = "当前版本 \(current)。前往下载页获取更新。"
+                    alert.addButton(withTitle: "前往下载")
+                    alert.addButton(withTitle: "以后再说")
+                    if alert.runModal() == .alertFirstButtonReturn,
+                       let page = URL(string: (obj["html_url"] as? String) ?? "https://github.com/Un1imited/pasta/releases") {
+                        NSWorkspace.shared.open(page)
+                    }
+                } else {
+                    self.backupAlert("已是最新版本", "当前版本 \(current) 即为最新发布。")
+                }
+            }
+        }.resume()
+    }
+
+    /// 语义化版本比较（按数字段逐位比）。
+    private static func isVersion(_ a: String, newerThan b: String) -> Bool {
+        let av = a.split(separator: ".").map { Int($0) ?? 0 }
+        let bv = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(av.count, bv.count) {
+            let x = i < av.count ? av[i] : 0
+            let y = i < bv.count ? bv[i] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
 
     @objc private func togglePlainText() {
         Settings.shared.plainTextPaste.toggle()

@@ -53,6 +53,7 @@ struct ClipItem: Codable, Identifiable {
     var pinned: Bool
     var date: Date
     var sourceBundleID: String?   // 复制来源 App 的 bundle id（卡片右上角徽标用）
+    var ocrText: String?          // 图片的 OCR 识别文本（Vision 本地识别，仅参与搜索不参与显示）
 
     init(kind: Kind, text: String? = nil, rtfData: Data? = nil, imageData: Data? = nil,
          pinned: Bool = false, sourceBundleID: String? = nil) {
@@ -64,6 +65,7 @@ struct ClipItem: Codable, Identifiable {
         self.pinned = pinned
         self.date = Date()
         self.sourceBundleID = sourceBundleID
+        self.ocrText = nil
     }
 
     /// 从持久层（SQLite）还原：rtf / 图片二进制不随加载常驻内存，用到时按需回读。
@@ -76,6 +78,12 @@ struct ClipItem: Codable, Identifiable {
         self.pinned = pinned
         self.date = date
         self.sourceBundleID = sourceBundleID
+        self.ocrText = nil
+    }
+
+    /// OCR 完成后重建该条的拼音索引（searchText 变了，旧索引失效）。
+    static func purgeSearchIndex(id: UUID) {
+        ClipCaches.pinyins.removeObject(forKey: id as NSUUID)
     }
 
     // MARK: - Codable（imageData 不编码；解码保留以兼容 v1 内联格式的迁移）
@@ -94,6 +102,7 @@ struct ClipItem: Codable, Identifiable {
         pinned = try c.decode(Bool.self, forKey: .pinned)
         date = try c.decode(Date.self, forKey: .date)
         sourceBundleID = try c.decodeIfPresent(String.self, forKey: .sourceBundleID)
+        ocrText = nil   // 旧 JSON 无此字段；迁移后由启动回填补算
     }
 
     func encode(to encoder: Encoder) throws {
@@ -156,12 +165,13 @@ struct ClipItem: Codable, Identifiable {
         }
     }
 
-    /// 搜索用的纯文本。
+    /// 搜索用的纯文本。图片附带 OCR 识别文本——截图可以按内容搜到。
     var searchText: String {
         switch kind {
         case .text, .file:
             return text ?? ""
         case .image:
+            if let ocr = ocrText, !ocr.isEmpty { return "图片 image " + ocr }
             return "图片 image"
         }
     }
