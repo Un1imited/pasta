@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Pasta",
-            path: "Sources/Pasta"
+            path: "Sources/Pasta",
+            linkerSettings: [.linkedLibrary("sqlite3")]
         )
     ]
 )
