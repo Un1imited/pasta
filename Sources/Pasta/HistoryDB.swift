@@ -54,6 +54,11 @@ final class HistoryDB {
         if !columnExists("ocr_text", table: "items") {
             _ = exec("ALTER TABLE items ADD COLUMN ocr_text TEXT")
         }
+        // 收藏时间列（常用页按它排序，位置稳定不随复制扰动）；存量收藏用当前 date 冻结为收藏时间
+        if !columnExists("pinned_at", table: "items") {
+            _ = exec("ALTER TABLE items ADD COLUMN pinned_at REAL")
+            _ = exec("UPDATE items SET pinned_at = date WHERE pinned = 1 AND pinned_at IS NULL")
+        }
         // FTS 是增强不是前提：trigram 不可用时静默降级
         ftsAvailable = exec("""
             CREATE VIRTUAL TABLE IF NOT EXISTS items_fts
@@ -107,7 +112,7 @@ final class HistoryDB {
     // MARK: - CRUD
 
     func insert(_ item: ClipItem) {
-        guard let s = prepare("INSERT OR REPLACE INTO items (id,kind,text,rtf,pinned,date,source_bundle_id,ocr_text) VALUES (?,?,?,?,?,?,?,?)") else { return }
+        guard let s = prepare("INSERT OR REPLACE INTO items (id,kind,text,rtf,pinned,date,source_bundle_id,ocr_text,pinned_at) VALUES (?,?,?,?,?,?,?,?,?)") else { return }
         defer { sqlite3_finalize(s) }
         sqlite3_bind_text(s, 1, item.id.uuidString, -1, Self.transient)
         sqlite3_bind_text(s, 2, item.kind.rawValue, -1, Self.transient)
@@ -119,6 +124,7 @@ final class HistoryDB {
         sqlite3_bind_double(s, 6, item.date.timeIntervalSince1970)
         if let b = item.sourceBundleID { sqlite3_bind_text(s, 7, b, -1, Self.transient) } else { sqlite3_bind_null(s, 7) }
         if let o = item.ocrText { sqlite3_bind_text(s, 8, o, -1, Self.transient) } else { sqlite3_bind_null(s, 8) }
+        if let p = item.pinnedAt { sqlite3_bind_double(s, 9, p.timeIntervalSince1970) } else { sqlite3_bind_null(s, 9) }
         sqlite3_step(s)
         restrictPermissions()   // WAL/SHM 可能在首写时才出现
     }
@@ -145,11 +151,12 @@ final class HistoryDB {
         return out
     }
 
-    func updatePinned(id: UUID, pinned: Bool) {
-        guard let s = prepare("UPDATE items SET pinned=? WHERE id=?") else { return }
+    func updatePinned(id: UUID, pinned: Bool, pinnedAt: Date?) {
+        guard let s = prepare("UPDATE items SET pinned=?, pinned_at=? WHERE id=?") else { return }
         defer { sqlite3_finalize(s) }
         sqlite3_bind_int(s, 1, pinned ? 1 : 0)
-        sqlite3_bind_text(s, 2, id.uuidString, -1, Self.transient)
+        if let p = pinnedAt { sqlite3_bind_double(s, 2, p.timeIntervalSince1970) } else { sqlite3_bind_null(s, 2) }
+        sqlite3_bind_text(s, 3, id.uuidString, -1, Self.transient)
         sqlite3_step(s)
     }
 
@@ -178,7 +185,7 @@ final class HistoryDB {
 
     /// 全量加载元数据（不含 rtf，按时间倒序）。仅启动时调用一次。
     func loadAll() -> [ClipItem] {
-        guard let s = prepare("SELECT id,kind,text,pinned,date,source_bundle_id,ocr_text FROM items ORDER BY date DESC") else { return [] }
+        guard let s = prepare("SELECT id,kind,text,pinned,date,source_bundle_id,ocr_text,pinned_at FROM items ORDER BY date DESC") else { return [] }
         defer { sqlite3_finalize(s) }
         var out: [ClipItem] = []
         while sqlite3_step(s) == SQLITE_ROW {
@@ -193,6 +200,9 @@ final class HistoryDB {
                 date: Date(timeIntervalSince1970: sqlite3_column_double(s, 4)),
                 sourceBundleID: sqlite3_column_text(s, 5).map { String(cString: $0) })
             item.ocrText = sqlite3_column_text(s, 6).map { String(cString: $0) }
+            if sqlite3_column_type(s, 7) != SQLITE_NULL {
+                item.pinnedAt = Date(timeIntervalSince1970: sqlite3_column_double(s, 7))
+            }
             out.append(item)
         }
         return out
@@ -228,10 +238,10 @@ final class HistoryDB {
         sqlite3_finalize(a)
         guard attached else { return 0 }
         defer { exec("DETACH DATABASE src") }
-        // 旧版备份包可能没有 ocr_text 列：按来源实际 schema 组列清单
-        let cols = columnExists("ocr_text", table: "items", schema: "src")
-            ? "id,kind,text,rtf,pinned,date,source_bundle_id,ocr_text"
-            : "id,kind,text,rtf,pinned,date,source_bundle_id"
+        // 旧版备份包可能缺 ocr_text / pinned_at 列：按来源实际 schema 组列清单
+        var cols = "id,kind,text,rtf,pinned,date,source_bundle_id"
+        if columnExists("ocr_text", table: "items", schema: "src") { cols += ",ocr_text" }
+        if columnExists("pinned_at", table: "items", schema: "src") { cols += ",pinned_at" }
         guard exec("INSERT OR IGNORE INTO items (\(cols)) SELECT \(cols) FROM src.items") else { return 0 }
         return Int(sqlite3_changes(db))
     }

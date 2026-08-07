@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -9,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var preferences = PreferencesWindowController()
 
     private var statusItem: NSStatusItem!
+    private var showItem: NSMenuItem!
     private var launchItem: NSMenuItem!
     private var plainItem: NSMenuItem!
     private var expirationTimer: Timer?
@@ -32,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         panel.onPaste = { [weak self] item, plain in
+            Settings.shared.hasCompletedFirstRun = true   // 用过一次粘贴 = 教学已完成
             self?.performPaste(item, plainText: plain)
         }
         // 缺辅助功能权限时的退路：只写剪贴板，不模拟 ⌘V（面板负责就地提示）。
@@ -50,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 keyCode: Settings.shared.hotKeyCode,
                 modifiers: Settings.shared.hotKeyModifiers
             )
+            self?.applyHotKeyToShowItem()   // 菜单里的快捷键展示跟随改键
         }
 
         // 过期清理：设置变更时立即清，运行中每小时清一次。
@@ -74,13 +78,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // 权限申请刻意不在启动时做：启动即弹系统授权吓人且归因不明。
-        // 推迟到首次真正回车粘贴——面板的权限 toast 会就地解释并直达设置。
+        // 首启自动唤起面板后，在教学空态里以 toast + 「打开设置」引导配置（零风险时刻），
+        // 错过引导则推迟到首次回车粘贴——面板的权限 toast 会就地解释并直达设置。
 
         // 首次启动：自动唤起一次面板，让教学空态（"复制任意内容试试…"）完成自我介绍。
+        // 完成标记推迟到确认「教学被看到」：面板若在唤起瞬间被误点收掉（激活竞态/用户在别处点击），
+        // 下次启动重试，教学时刻不蒸发。
         if !Settings.shared.hasCompletedFirstRun {
-            Settings.shared.hasCompletedFirstRun = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                self?.togglePanel(forceShow: true)
+                guard let self else { return }
+                self.togglePanel(forceShow: true)
+                // 面板稳定显示后：权限引导 toast（首启教学的「第 0 步」）
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.panel.showPermissionOnboardingIfNeeded()
+                }
+                // 3 秒后还在屏上 = 教学被看到，才算完成首启
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                    if self?.panel.isVisible == true { Settings.shared.hasCompletedFirstRun = true }
+                }
             }
         }
     }
@@ -135,7 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
-        menu.addItem(withTitle: "显示历史   \(Settings.shared.hotKeyDisplay)", action: #selector(showPanel), keyEquivalent: "")
+        showItem = menu.addItem(withTitle: "显示历史", action: #selector(showPanel), keyEquivalent: "")
+        applyHotKeyToShowItem()
         menu.addItem(.separator())
 
         plainItem = NSMenuItem(title: "粘贴为纯文本（去格式）", action: #selector(togglePlainText), keyEquivalent: "")
@@ -164,6 +180,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showPanel() { togglePanel(forceShow: true) }
+
+    /// 「显示历史」的快捷键放进原生 keyEquivalent 位（右对齐灰字，系统样式）。
+    /// 状态栏菜单的 keyEquivalent 只在菜单展开时参与派发，不会与 Carbon 全局热键双触发。
+    /// 主键不是单字符（Space / F 键等）时原生位放不下，退回写进标题的旧样式。
+    private func applyHotKeyToShowItem() {
+        let display = Settings.shared.hotKeyDisplay
+        let mods = Settings.shared.hotKeyModifiers
+        var mask: NSEvent.ModifierFlags = []
+        if mods & UInt32(cmdKey) != 0 { mask.insert(.command) }
+        if mods & UInt32(shiftKey) != 0 { mask.insert(.shift) }
+        if mods & UInt32(optionKey) != 0 { mask.insert(.option) }
+        if mods & UInt32(controlKey) != 0 { mask.insert(.control) }
+        let keyPart = display.drop(while: { "⌃⌥⇧⌘".contains($0) })
+        if keyPart.count == 1, let ch = keyPart.first {
+            showItem.title = "显示历史"
+            showItem.keyEquivalent = String(ch).lowercased()
+            showItem.keyEquivalentModifierMask = mask
+        } else {
+            showItem.title = "显示历史   \(display)"
+            showItem.keyEquivalent = ""
+        }
+    }
 
     @objc private func clearHistory() {
         let count = store.items.filter { !$0.pinned }.count

@@ -34,6 +34,10 @@ struct Theme {
     var gradient: [NSColor]? = nil
     var gradientLocations: [NSNumber]? = nil
 
+    /// accent 底上的文字色（⌘ 直达角标等）。深色近黑默认适配 midnight/glass/ink 的亮 accent
+    /// （白字在这三个 accent 上仅 1.6–2.9:1）；daylight 的深蓝 accent 显式改用白（5.0:1）。
+    var onAccent: NSColor = NSColor(srgbRed: 0.04, green: 0.10, blue: 0.16, alpha: 1)
+
     // MARK: - 品牌原色（单一事实源）
     /// Pasta 蓝 #189EF2。全部蓝系主题的 accent 从它按明度派生（色相 203° 不变）；
     /// _design/hero.html、icon-v2.html 的强调色与此同源。
@@ -94,7 +98,8 @@ struct Theme {
         cardInsetHi: NSColor(white: 1, alpha: 0.9),
         cardShadow: NSColor(srgbRed: 0.078, green: 0.176, blue: 0.333, alpha: 1),
         cardShadowNormal: 0.18, cardShadowHover: 0.26,
-        pinColor: NSColor(srgbRed: 0.69, green: 0.494, blue: 0, alpha: 1))   // #B07E00 琥珀：白卡上 ≥3:1
+        pinColor: NSColor(srgbRed: 0.69, green: 0.494, blue: 0, alpha: 1),   // #B07E00 琥珀：白卡上 ≥3:1
+        onAccent: .white)   // 深蓝 accent #1274B2 上白字 5.0:1
 
     // MARK: - 3 · 纯墨（OLED）
     static let ink = Theme(
@@ -117,41 +122,52 @@ struct Theme {
         cardShadow: .black, cardShadowNormal: 0.55, cardShadowHover: 0.62,
         pinColor: NSColor(srgbRed: 0.91, green: 0.788, blue: 0.478, alpha: 1))   // 与 OLED 金 accent 同源，收敛于纯墨的克制气质
 
-    // MARK: - 4 · 晶蓝（玻璃拟态）— 深蓝横向渐变底 + 半透玻璃卡
+    // MARK: - 4 · 晶蓝（玻璃拟态）— 深蓝横向渐变底 + 深色半透玻璃卡
+    // 对比度按最不利假设验证：behind-window 磨砂后景为纯白（亮色壁纸）、卡片位于渐变最亮段。
+    // 卡底刻意用深色半透而非浅色微透——浅卡在亮壁纸下合成变亮，任何文字对比度声称都会失效。
     static let glass = Theme(
         id: "glass", name: "晶蓝",
         blurMaterial: .hudWindow, appearance: .darkAqua,
-        shelfTint: NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.82),  // 渐变缺省时的兜底
+        shelfTint: NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.92),  // 渐变缺省时的兜底
         topEdge: NSColor(white: 1, alpha: 0.22),
         glow: NSColor(srgbRed: 0.355, green: 0.727, blue: 0.960, alpha: 0.16),
         primaryText: NSColor(white: 1, alpha: 0.95),
-        secondaryText: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.72),  // ≥4.5:1（WCAG AA）
-        accent: NSColor(srgbRed: 0.355, green: 0.727, blue: 0.960, alpha: 1),   // #5BB9F5 品牌蓝提明度降饱和（合成卡底上 5.2:1）
+        secondaryText: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.85),  // 白后景+最亮段实算 4.8:1（AA）
+        accent: NSColor(srgbRed: 0.355, green: 0.727, blue: 0.960, alpha: 1),   // #5BB9F5：深卡底上 5.5:1
         accentGlow: NSColor(srgbRed: 0.355, green: 0.727, blue: 0.960, alpha: 0.55),
-        cardBG: NSColor(srgbRed: 0.608, green: 0.745, blue: 0.910, alpha: 0.13),       // 半透，透出渐变
-        cardHoverBG: NSColor(srgbRed: 0.647, green: 0.784, blue: 0.949, alpha: 0.20),
+        cardBG: NSColor(srgbRed: 0.10, green: 0.15, blue: 0.24, alpha: 0.60),        // 深色半透，玻璃感来自透底渐变
+        cardHoverBG: NSColor(srgbRed: 0.14, green: 0.20, blue: 0.31, alpha: 0.68),
         cardFG: NSColor(white: 1, alpha: 0.92),
-        cardDim: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.80),     // 6.0:1（对合成后卡底）
-        cardFaint: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.65),   // 4.6:1
+        cardDim: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.80),     // 白后景实算 6.3:1
+        cardFaint: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.65),   // 白后景实算 4.7:1
         cardBorder: NSColor(white: 1, alpha: 0.14),
         cardInsetHi: NSColor(white: 1, alpha: 0.24),
         cardShadow: .black, cardShadowNormal: 0.34, cardShadowHover: 0.46,
         gradient: [
-            NSColor(srgbRed: 0.078, green: 0.094, blue: 0.122, alpha: 0.82),  // #14181f 左暗
-            NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.82),  // #1c2740
-            NSColor(srgbRed: 0.161, green: 0.263, blue: 0.408, alpha: 0.82),  // #294368 中右最亮
-            NSColor(srgbRed: 0.129, green: 0.188, blue: 0.290, alpha: 0.82),  // #21304a 右
+            NSColor(srgbRed: 0.078, green: 0.094, blue: 0.122, alpha: 0.92),  // #14181f 左暗
+            NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.92),  // #1c2740
+            NSColor(srgbRed: 0.161, green: 0.263, blue: 0.408, alpha: 0.92),  // #294368 中右最亮
+            NSColor(srgbRed: 0.129, green: 0.188, blue: 0.290, alpha: 0.92),  // #21304a 右
         ],
         gradientLocations: [0.0, 0.36, 0.62, 1.0])
 }
 
-// MARK: - 字阶（5 档，步进 ≈1.125；UI 文字一律从这里取号）
+// MARK: - 字阶（6 档，步进 ≈1.125；UI 文字一律从这里取号）
 enum Typo {
+    static let badge: CGFloat = 10       // ⌘ 直达角标（唯一比 caption 小的特例）
     static let caption: CGFloat = 11     // 卡片元信息/来源/字数、hint、偏好提示
     static let body: CGFloat = 12.5      // 卡片长正文、工具条条数、toast
-    static let control: CGFloat = 13     // 系统控件默认字号（偏好窗口，不显式设置）
+    static let control: CGFloat = 13     // 系统控件默认字号（偏好窗口、预览正文）
     static let emphasis: CGFloat = 14    // 卡片短内容、空状态
     static let title: CGFloat = 16       // 搜索框
+}
+
+// MARK: - 动效（统一时长/幅度；全部动画路径均受系统「减弱动态」约束）
+enum Motion {
+    static let state: TimeInterval = 0.14     // 卡片选中/hover 状态过渡
+    static let panelIn: TimeInterval = 0.14   // 面板底部浮入（隐藏刻意无动画：工具用完即走）
+    static let toastIn: TimeInterval = 0.15   // toast 渐显
+    static let hoverScale: CGFloat = 1.03     // 卡片 hover 轻微放大
 }
 
 // MARK: - 间距与圆角（4pt 基网格）
