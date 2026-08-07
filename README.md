@@ -52,7 +52,7 @@ open Pasta.app    # 运行，菜单栏出现剪贴板图标（无 Dock 图标）
 
 ### 方式二 · 下载预编译版
 
-从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-1.6.1.zip`，解压拖到 `/Applications`。
+从 [Releases](https://github.com/Un1imited/pasta/releases) 下载 `Pasta-1.7.0.zip`，解压拖到 `/Applications`。
 
 > 预编译版为通用二进制（Apple Silicon + Intel 均可直接用）。
 >
