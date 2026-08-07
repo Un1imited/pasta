@@ -10,8 +10,16 @@ import AppKit
 final class ClipboardStore {
     private(set) var items: [ClipItem] = []
     var onChange: (() -> Void)?
+    /// 超大图片被丢弃时回调（主线程，参数为字节数）——静默丢弃违反「已尽力+归因」原则。
+    var onImageTooLarge: ((Int) -> Void)?
+    /// 数据库打不开：本次会话仅内存运行（面板首次唤起时提示用户）。
+    private(set) var dbUnavailable = false
+    /// 正在排队/识别中的图片 OCR（主线程读写）：搜索无结果时归因「还在识别中」用。
+    private(set) var pendingOCR = Set<UUID>()
 
     private let maxImageBytes = 8 * 1024 * 1024
+    /// 图片入库上限（MB），提示文案用。
+    var maxImageMB: Int { maxImageBytes / (1024 * 1024) }
     private let dbURL: URL
     private let jsonURL: URL            // 仅迁移用
     private var db: HistoryDB?
@@ -35,7 +43,10 @@ final class ClipboardStore {
         Self.excludeFromBackup(support)              // 剪贴历史不进 Time Machine：备份会让敏感内容永久化
 
         db = HistoryDB(url: dbURL)
-        if db == nil { NSLog("Pasta: 数据库不可用，本次会话仅内存运行") }
+        if db == nil {
+            dbUnavailable = true
+            NSLog("Pasta: 数据库不可用，本次会话仅内存运行")
+        }
         migrateFromJSONIfNeeded()
         items = db?.loadAll() ?? []
         purgeExpiredInternal()
@@ -58,21 +69,26 @@ final class ClipboardStore {
     // MARK: - OCR（图片文字进搜索索引）
 
     /// 图片入库/回填时排一次本地文字识别；识别到内容才更新（无文字的图不反复重试本次会话内已处理）。
+    /// 排队与完成都记入 pendingOCR：搜索无结果时面板据此归因「截图还在识别中」。
     private func scheduleOCR(for item: ClipItem) {
         guard item.kind == .image else { return }
         let id = item.id
         let mem = item.imageData
         let file = item.imageFileURL
+        pendingOCR.insert(id)
         OCRService.recognize(provider: { mem ?? (try? Data(contentsOf: file)) }) { [weak self] text in
-            guard let text else { return }
-            DispatchQueue.main.async { self?.applyOCR(id: id, text: text) }
+            DispatchQueue.main.async { self?.finishOCR(id: id, text: text) }
         }
     }
 
-    private func applyOCR(id: UUID, text: String) {
+    /// OCR 完成（含识别为空）：清 pending；有文字才更新索引并通知刷新（卡片 OCR 微标）。
+    private func finishOCR(id: UUID, text: String?) {
+        pendingOCR.remove(id)
+        guard let text else { return }
         if let idx = items.firstIndex(where: { $0.id == id }) { items[idx].ocrText = text }
         ClipItem.purgeSearchIndex(id: id)   // searchText 变了，重建拼音索引
         dbQueue.async { [weak self] in self?.db?.updateOCR(id: id, text: text) }
+        onChange?()
     }
 
     /// 单实例守护：对锁文件加排他 flock。返回 false 表示已有另一个 Pasta
@@ -95,8 +111,9 @@ final class ClipboardStore {
     }
 
     func add(_ newItem: ClipItem) {
-        if newItem.kind == .image, (newItem.imageData?.count ?? 0) > maxImageBytes {
-            return   // 超大图片不入库，避免历史膨胀。
+        if newItem.kind == .image, let bytes = newItem.imageData?.count, bytes > maxImageBytes {
+            onImageTooLarge?(bytes)   // 不入库（避免历史膨胀），但要告诉用户，不静默消失
+            return
         }
         purgeExpiredInternal()
         if let idx = items.firstIndex(where: { $0.sameContent(as: newItem) }) {
@@ -138,7 +155,9 @@ final class ClipboardStore {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].pinned.toggle()
         let pinned = items[idx].pinned
-        dbQueue.async { [weak self] in self?.db?.updatePinned(id: id, pinned: pinned) }
+        items[idx].pinnedAt = pinned ? Date() : nil   // 常用页按收藏时间排序，位置不随复制扰动
+        let pinnedAt = items[idx].pinnedAt
+        dbQueue.async { [weak self] in self?.db?.updatePinned(id: id, pinned: pinned, pinnedAt: pinnedAt) }
         onChange?()
     }
 

@@ -105,7 +105,9 @@ final class HotKeyRecorderButton: NSButton {
     /// 主键的可读名称。
     private static func keyName(for event: NSEvent) -> String {
         if let special = specialKeys[Int(event.keyCode)] { return special }
-        if let chars = event.charactersIgnoringModifiers, !chars.isEmpty {
+        if let chars = event.charactersIgnoringModifiers, !chars.isEmpty,
+           // 功能键等会给出 Unicode 私有区字符（0xF700-0xF8FF），显示出来是乱码
+           !chars.unicodeScalars.contains(where: { (0xF700...0xF8FF).contains($0.value) }) {
             return chars.uppercased()
         }
         return "Key\(event.keyCode)"
@@ -115,5 +117,7 @@ final class HotKeyRecorderButton: NSButton {
         49: "Space", 36: "↩", 48: "⇥", 51: "⌫", 53: "esc",
         123: "←", 124: "→", 125: "↓", 126: "↑",
         122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6",
+        98: "F7", 100: "F8", 101: "F9", 109: "F10", 103: "F11", 111: "F12",
+        105: "F13", 107: "F14", 113: "F15", 106: "F16", 64: "F17", 79: "F18", 80: "F19", 90: "F20",
     ]
 }

@@ -29,7 +29,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
 
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 528),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 560),
             styleMask: [.titled, .closable],
             backing: .buffered, defer: false
         )
@@ -62,7 +62,17 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         let rowTheme = NSStackView(views: [label("主题皮肤"), themePopup])
         let rowHotkey = NSStackView(views: [label("唤起快捷键"), recorder])
         let rowPlain = NSStackView(views: [label("粘贴方式"), plainCheck])
-        let rowExpire = NSStackView(views: [label("历史保留"), expirationPopup])
+        // 保留时长上限 6 个月是隐私立场（控制敏感内容留存面），不解释会被当成功能缺失
+        let expireHint = NSTextField(wrappingLabelWithString:
+            "最长 6 个月：限制敏感内容的留存时间。需要长期保留的记录请加入「常用」（⌘P），常用项永不过期。")
+        expireHint.font = .systemFont(ofSize: Typo.caption)
+        expireHint.textColor = .tertiaryLabelColor
+        let expireBox = NSStackView(views: [expirationPopup, expireHint])
+        expireBox.orientation = .vertical
+        expireBox.spacing = 4
+        expireBox.alignment = .leading
+        let rowExpire = NSStackView(views: [label("历史保留"), expireBox])
+        rowExpire.alignment = .top
         let rowLimit = NSStackView(views: [label("历史容量"), limitPopup])
 
         for (id, name) in themeOptions {
@@ -90,6 +100,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             row.translatesAutoresizingMaskIntoConstraints = false
             (row.views.first as? NSTextField)?.widthAnchor.constraint(equalToConstant: 96).isActive = true
         }
+        rowExpire.alignment = .top   // 多行内容：标签对齐首行（循环里统一设的 centerY 不适用）
 
         let hint = NSTextField(wrappingLabelWithString: "提示：列表中按 ⏎ 用上面设置的方式粘贴；按 ⌥⏎ 临时强制纯文本粘贴。")
         hint.font = .systemFont(ofSize: Typo.caption)
@@ -174,6 +185,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 24),
             recorder.widthAnchor.constraint(equalToConstant: 220),
+            expireHint.widthAnchor.constraint(equalToConstant: 296),
             ignoredScroll.widthAnchor.constraint(equalToConstant: 296),
             ignoredScroll.heightAnchor.constraint(equalToConstant: 84),
             ignoredHint.widthAnchor.constraint(equalToConstant: 296),

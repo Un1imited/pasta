@@ -23,6 +23,7 @@ final class ClipCardView: NSView {
     private let bodyImage = NSImageView()
     private let srcLabel = NSTextField(labelWithString: "")     // 底部左：来源 App
     private let countLabel = NSTextField(labelWithString: "")   // 底部右：字符数/尺寸
+    private let ocrBadge = NSImageView()                        // 图片卡：OCR 完成（文字可搜）微标
     private let topHi = NSView()                                // 顶部内高光（机械质感）
     private let shortFont = NSFont.systemFont(ofSize: Typo.emphasis, weight: .medium)   // 短内容：大而醒目、居中
     private let longFont = NSFont.systemFont(ofSize: Typo.body)                         // 长内容：常规、顶对齐
@@ -84,13 +85,18 @@ final class ClipCardView: NSView {
         topHi.wantsLayer = true
         topHi.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.13).cgColor
 
-        indexBadge.font = .systemFont(ofSize: 10, weight: .bold)
+        indexBadge.font = .systemFont(ofSize: Typo.badge, weight: .bold)
         indexBadge.alignment = .center
         indexBadge.wantsLayer = true
         indexBadge.layer?.cornerRadius = 4
         indexBadge.isHidden = true
 
-        for v in [metaLabel, badge, pinView, headerLine, footerLine, bodyText, bodyImage, srcLabel, countLabel, topHi, indexBadge] {
+        // OCR 完成微标：告诉用户「这张截图的文字已可搜索」——识别成败不再是薛定谔态
+        ocrBadge.image = NSImage(systemSymbolName: "text.viewfinder", accessibilityDescription: "文字已识别，可搜索")
+        ocrBadge.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 9, weight: .medium)
+        ocrBadge.isHidden = true
+
+        for v in [metaLabel, badge, pinView, headerLine, footerLine, bodyText, bodyImage, srcLabel, countLabel, topHi, indexBadge, ocrBadge] {
             addSubview(v)
         }
     }
@@ -109,6 +115,7 @@ final class ClipCardView: NSView {
         countLabel.stringValue = item.footerInfo
         srcLabel.stringValue = item.sourceAppName ?? ""
         pinView.isHidden = !item.pinned
+        ocrBadge.isHidden = !(isImage && !(item.ocrText ?? "").isEmpty)
 
         if let icon = item.sourceAppIcon {
             badge.image = icon
@@ -152,6 +159,7 @@ final class ClipCardView: NSView {
         if let src = item.sourceAppName, !src.isEmpty { ax += "，来自 \(src)" }
         ax += "，\(item.relativeTime)"
         if item.pinned { ax += "，已收藏" }
+        if !ocrBadge.isHidden { ax += "，文字已识别可搜索" }
         setAccessibilityLabel(ax)
         setAccessibilitySelected(false)
     }
@@ -196,6 +204,7 @@ final class ClipCardView: NSView {
         bodyText.textColor = theme.cardFG
         srcLabel.textColor = theme.cardDim
         countLabel.textColor = theme.cardFaint
+        ocrBadge.contentTintColor = theme.cardFaint
         pinView.contentTintColor = theme.pinColor
         headerLine.fillColor = theme.cardBorder
         footerLine.fillColor = theme.cardBorder
@@ -213,7 +222,7 @@ final class ClipCardView: NSView {
     func setIndexBadge(_ n: Int?) {
         guard let n else { indexBadge.isHidden = true; return }
         indexBadge.stringValue = "\(n)"
-        indexBadge.textColor = .white
+        indexBadge.textColor = theme.onAccent   // 白字在亮 accent 上最低只有 1.6:1，按主题取配对色
         indexBadge.layer?.backgroundColor = theme.accent.cgColor
         indexBadge.isHidden = false
     }
@@ -247,7 +256,7 @@ final class ClipCardView: NSView {
 
         // hover 轻微放大（绕中心），并抬到最上层避免被邻卡盖住；系统开了减弱动态则不缩放
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let scale: CGFloat = (hot && !reduceMotion) ? 1.03 : 1.0
+        let scale: CGFloat = (hot && !reduceMotion) ? Motion.hoverScale : 1.0
         animate("transform", NSValue(caTransform3D: centeredScale(scale)), animated)
         layer?.zPosition = hot ? 1 : 0
     }
@@ -270,7 +279,7 @@ final class ClipCardView: NSView {
             let a = CABasicAnimation(keyPath: key)
             a.fromValue = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
             a.toValue = value
-            a.duration = 0.14
+            a.duration = Motion.state
             a.timingFunction = CAMediaTimingFunction(name: .easeOut)
             layer.add(a, forKey: "state_" + key)
         }
@@ -306,8 +315,11 @@ final class ClipCardView: NSView {
         footerLine.frame = NSRect(x: ins, y: 33, width: w - ins * 2, height: 0.5)
         let countW: CGFloat = 70
         countLabel.frame = NSRect(x: w - ins - countW, y: 10, width: countW, height: 14)
+        // OCR 微标：字符数左侧；未识别/非图片时隐藏不占位
+        let hasOCR = !ocrBadge.isHidden
+        ocrBadge.frame = NSRect(x: w - ins - countW - 16, y: 11, width: 12, height: 12)
         let pinned = !pinView.isHidden
-        let srcRight = w - ins - countW - 6
+        let srcRight = w - ins - countW - (hasOCR ? 22 : 6)
         srcLabel.frame = NSRect(x: pinned ? ins + 16 : ins, y: 10, width: max(0, srcRight - (pinned ? ins + 16 : ins)), height: 14)
         pinView.frame = NSRect(x: ins, y: 11, width: 12, height: 12)
 
@@ -416,6 +428,74 @@ extension ClipCardView: NSDraggingSource {
     }
 }
 
+/// 主题化胶囊标签（剪贴板 / 常用）。原生 NSSegmentedControl 的 Aqua 高光胶囊
+/// 浮在深色磨砂 + 品牌蓝焦点环的自绘 chrome 上是全面板唯一材质出戏的控件，
+/// 换成与焦点环同语言的 accent 半透胶囊（选中：accent 16% 底 + 45% 描边 + accent 字）。
+final class PillTabControl: NSView {
+    var onChange: ((Int) -> Void)?
+    private(set) var selectedIndex = 0
+    private let titles: [String]
+    private var buttons: [NSButton] = []
+    private var theme = Theme.current
+    private let padH: CGFloat = 14
+    private let btnH: CGFloat = 26
+    private let btnGap: CGFloat = 4
+
+    init(titles: [String]) {
+        self.titles = titles
+        super.init(frame: .zero)
+        var x: CGFloat = 0
+        for (i, t) in titles.enumerated() {
+            let b = NSButton(title: t, target: self, action: #selector(clicked(_:)))
+            b.isBordered = false
+            b.tag = i
+            b.wantsLayer = true
+            b.layer?.cornerRadius = 7
+            let w = ceil((t as NSString).size(withAttributes:
+                [.font: NSFont.systemFont(ofSize: Typo.control, weight: .semibold)]).width) + padH * 2
+            b.frame = NSRect(x: x, y: 0, width: w, height: btnH)
+            x += w + btnGap
+            addSubview(b)
+            buttons.append(b)
+        }
+        setFrameSize(NSSize(width: max(0, x - btnGap), height: btnH))
+        restyle()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not used") }
+
+    @objc private func clicked(_ sender: NSButton) {
+        select(sender.tag)
+        onChange?(sender.tag)
+    }
+
+    func select(_ i: Int) {
+        guard buttons.indices.contains(i) else { return }
+        selectedIndex = i
+        restyle()
+    }
+
+    func applyTheme(_ t: Theme) {
+        theme = t
+        restyle()
+    }
+
+    private func restyle() {
+        for (i, b) in buttons.enumerated() {
+            let on = i == selectedIndex
+            b.layer?.backgroundColor = on ? theme.accent.withAlphaComponent(0.16).cgColor : NSColor.clear.cgColor
+            b.layer?.borderWidth = on ? 1 : 0
+            b.layer?.borderColor = theme.accent.withAlphaComponent(0.45).cgColor
+            // 选中/未选中都用 semibold 测宽（init 时按 semibold 算），避免切换时文字抖动
+            b.attributedTitle = NSAttributedString(string: titles[i], attributes: [
+                .font: NSFont.systemFont(ofSize: Typo.control, weight: on ? .semibold : .regular),
+                .foregroundColor: on ? theme.accent : theme.secondaryText,
+            ])
+            b.setAccessibilityLabel(on ? "\(titles[i])，已选中" : titles[i])
+        }
+    }
+}
+
 /// 横向卡片条专用滚动视图：把纵向滚轮映射为横向滚动（纯纵向滚轮的鼠标才滚得动）。
 final class HorizontalScrollView: NSScrollView {
     override func scrollWheel(with event: NSEvent) {
@@ -454,17 +534,19 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private var flagsMonitor: Any?
 
     /// hint 文案随「全局纯文本粘贴」开关变化，保证状态可见。
+    /// 常显版收敛为一短句（常显整行快捷键是持续性轻噪），完整教学面在按住 ⌘ 的展开版。
     private var hintShort: String {
-        (Settings.shared.plainTextPaste ? "↩ 纯文本粘贴" : "↩ 粘贴") + " · ⌘P 常用 · 按住 ⌘ 更多"
+        (Settings.shared.plainTextPaste ? "↩ 纯文本粘贴" : "↩ 粘贴") + " · 按住 ⌘ 全部快捷键"
     }
     private var hintFull: String {
         (Settings.shared.plainTextPaste ? "↩ 纯文本粘贴 · ⌥↩ 同" : "↩ 粘贴 · ⌥↩ 纯文本")
-            + " · 空格 预览 · ⌘C 复制 · ⌘1-9 直达 · ⌘P 常用 · ⌘⌫ 删除 · ⌘Z 撤销 · ⌘←→ 标签 · esc 关闭"
+            + " · 空格 预览 · ⌘C 复制 · ⌘1-9 直达 · ⌘P 常用 · ⌘⌫ 删除 · ⌘Z 撤销 · ↑↓ 区域 · ⌘←→ 标签 · esc 关闭"
     }
     /// ⌘+数字 → 直达粘贴第 N 条（ANSI 键位码）
     private static let digitKeys: [UInt16: Int] = [18: 1, 19: 2, 20: 3, 21: 4, 23: 5, 22: 6, 26: 7, 28: 8, 25: 9]
-    private var tabControl: NSSegmentedControl!
+    private var tabControl: PillTabControl!
     private var tabContainer: NSView!
+    private var hintPill: NSView!
     private var showPinnedOnly = false
     private var divider: NSBox!
     private var cardScroll: NSScrollView!
@@ -490,6 +572,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     /// 最近一次唤起时间：失活收面板的宽限期判定用。
     private var shownAt = Date.distantPast
+    /// 唤起后卡片建好前按下的 ⏎：暂存 plain 标记，卡片建好立即补执行（快手不落空）。
+    private var pendingQuickPaste: Bool?
+    /// 面板不可见时产生的提示（大图被丢弃、权限已授予等），下次唤起时补显示。
+    private var pendingNotice: (text: String, actionTitle: String?, action: (() -> Void)?, duration: TimeInterval)?
+    /// 数据库不可用只提醒一次（每次会话）。
+    private var didWarnDBUnavailable = false
+    /// 辅助功能授权轮询：打开设置后监测授权变化，主动补「已授权/需重启」提示。
+    private var axWatchTimer: Timer?
     private let shelfHeight: CGFloat = 332
     private let toolbarH = Metrics.toolbarH
     private let gap = Metrics.gap
@@ -500,6 +590,12 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         super.init()
         store.onChange = { [weak self] in
             DispatchQueue.main.async { self?.refilterIfVisible() }
+        }
+        // 超大图片被丢弃：面板可见就地 toast；不可见记下，下次唤起补提示
+        store.onImageTooLarge = { [weak self] bytes in
+            guard let self else { return }
+            let mb = Double(bytes) / 1024 / 1024
+            self.notice("图片 \(String(format: "%.0f", mb)) MB 超过 \(store.maxImageMB) MB 上限，未记入历史", duration: 5)
         }
         buildPanel()
         // App 失活 → 收面板（hidesOnDeactivate 的手动版，走 hide() 正规清理路径）。
@@ -628,22 +724,28 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         countLabel.alignment = .right
         blur.addSubview(countLabel)
 
+        // hint 胶囊：短提示常驻（描边胶囊收敛存在感），按住 ⌘ 展开完整快捷键
         hintLabel = NSTextField(labelWithString: hintShort)
         hintLabel.font = .systemFont(ofSize: Typo.caption)
         hintLabel.lineBreakMode = .byTruncatingHead
-        hintLabel.textColor = NSColor.white.withAlphaComponent(0.32)
-        hintLabel.alignment = .right
-        blur.addSubview(hintLabel)
+        hintPill = NSView()
+        hintPill.wantsLayer = true
+        hintPill.layer?.cornerRadius = 6
+        hintPill.layer?.borderWidth = 1
+        hintPill.addSubview(hintLabel)
+        blur.addSubview(hintPill)
 
-        // 剪贴板 / 常用 标签页
-        // 原生分段控件（系统级选中样式）+ 外层容器（焦点蓝环）
-        tabControl = NSSegmentedControl(labels: ["剪贴板", "常用"], trackingMode: .selectOne,
-                                        target: self, action: #selector(tabClicked))
-        tabControl.segmentStyle = .capsule
-        tabControl.selectedSegment = 0
-        tabControl.sizeToFit()
+        // 剪贴板 / 常用 标签页：主题化胶囊（与焦点环同语言）+ 外层容器（焦点蓝环）
+        tabControl = PillTabControl(titles: ["剪贴板", "常用"])
+        tabControl.onChange = { [weak self] i in
+            guard let self else { return }
+            self.showPinnedOnly = i == 1
+            self.focusZone = .tabs
+            self.refilter()
+            self.updateFocusVisuals()
+        }
         let cs = tabControl.frame.size
-        tabControl.frame = NSRect(x: 6, y: 6, width: cs.width, height: cs.height)
+        tabControl.setFrameOrigin(NSPoint(x: 6, y: 6))
         tabContainer = NSView(frame: NSRect(x: 0, y: 0, width: cs.width + 12, height: cs.height + 12))
         tabContainer.wantsLayer = true
         tabContainer.layer?.masksToBounds = false
@@ -683,19 +785,22 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         applyTheme()
     }
 
+    /// 弹性搜索框宽度：随面板宽在 236–340pt 之间伸展。
+    private func searchWidth(width W: CGFloat) -> CGFloat {
+        min(340, max(236, W * 0.16))
+    }
+
     private func layoutShelf(width W: CGFloat) {
         let H = shelfHeight
         let yc = H - toolbarH / 2
-        let searchW: CGFloat = 236
+        let searchW = searchWidth(width: W)
         searchContainer.frame = NSRect(x: 12, y: yc - 16, width: searchW, height: 32)
         magnifier.frame = NSRect(x: 8, y: 8, width: 16, height: 16)
         searchField.frame = NSRect(x: 32, y: 4, width: searchW - 42 - 20, height: 24)
         clearButton.frame = NSRect(x: searchW - 26, y: 7, width: 18, height: 18)
         tabContainer.setFrameOrigin(NSPoint(x: 12 + searchW + 12, y: yc - tabContainer.frame.height / 2))
-        // hint 弹性宽度：标签区右缘 → 条数左缘，右对齐（按住 ⌘ 展开全部键位时也放得下）
-        let hintLeft = 12 + searchW + 12 + tabContainer.frame.width + 16
-        hintLabel.frame = NSRect(x: hintLeft, y: yc - 8, width: max(0, W - 158 - hintLeft), height: 16)
         countLabel.frame = NSRect(x: W - 148, y: yc - 9, width: 134, height: 18)   // 容「前 300 · 共 5000 条」
+        layoutHintPill()
         divider.frame = NSRect(x: 0, y: H - toolbarH, width: W, height: 0.5)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         shelfGradient.frame = CGRect(x: 0, y: 0, width: W, height: H)
@@ -704,8 +809,21 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         emptyLabel.frame = NSRect(x: 0, y: 0, width: W, height: H - toolbarH)
     }
 
+    /// hint 胶囊：右对齐在条数左缘，宽度随当前文本收缩（按住 ⌘ 展开时变宽）。
+    private func layoutHintPill() {
+        let W = panel.frame.width
+        let yc = shelfHeight - toolbarH / 2
+        let leftEdge = 12 + searchWidth(width: W) + 12 + tabContainer.frame.width + 16
+        let rightEdge = W - 148 - 10   // 条数左缘再留 10pt
+        let textW = ceil((hintLabel.stringValue as NSString).size(withAttributes:
+            [.font: NSFont.systemFont(ofSize: Typo.caption)]).width)
+        let pillW = min(textW + 20, max(0, rightEdge - leftEdge))
+        hintPill.frame = NSRect(x: rightEdge - pillW, y: yc - 11, width: pillW, height: 22)
+        hintLabel.frame = NSRect(x: 10, y: 3, width: max(0, pillW - 20), height: 16)
+    }
+
     private func updateTabs() {
-        tabControl.selectedSegment = showPinnedOnly ? 1 : 0
+        tabControl.select(showPinnedOnly ? 1 : 0)
     }
 
     /// 焦点区视觉：聚焦的区域加强调色环 + 辉光；卡片区聚焦 → 选中卡强调框。
@@ -752,20 +870,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         searchField.placeholderString = "搜索剪贴历史…"
         countLabel.textColor = theme.secondaryText
         hintLabel.textColor = theme.secondaryText   // 不再降 0.8：保住 ≥4.5:1 对比度
+        hintPill.layer?.borderColor = theme.cardBorder.cgColor
+        tabControl.applyTheme(theme)
         emptyLabel.textColor = theme.secondaryText
     }
 
     private func setZone(_ z: Focus) {
         guard focusZone != z else { return }
         focusZone = z
-        updateFocusVisuals()
-    }
-
-    /// 鼠标点击分段控件 → 焦点切到标签区，之后方向键作用在标签上。
-    @objc private func tabClicked() {
-        showPinnedOnly = tabControl.selectedSegment == 1
-        focusZone = .tabs
-        refilter()
         updateFocusVisuals()
     }
 
@@ -796,6 +908,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         searchField.stringValue = ""
         clearButton.isHidden = true
         hintLabel.stringValue = hintShort
+        layoutHintPill()
         showPinnedOnly = false
         focusZone = .cards
         updateTabs()
@@ -817,6 +930,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         // 先把面板显示出来，让用户立刻看到它。
         shownAt = Date()
+        pendingQuickPaste = nil
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeFirstResponder(searchField)
@@ -824,7 +938,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         if !reduceMotion {
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.14
+                ctx.duration = Motion.panelIn
                 ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().setFrame(finalFrame, display: true)
                 panel.animator().alphaValue = 1
@@ -836,13 +950,44 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             guard let self, self.panel.isVisible else { return }
             self.refilter()
             self.updateFocusVisuals()
+            // 比卡片构建还快的 ⏎：现在卡片就绪，补执行那次粘贴
+            if let plain = self.pendingQuickPaste {
+                self.pendingQuickPaste = nil
+                self.pasteSelected(plain: plain)
+                return
+            }
+            self.showDeferredNotices()
+        }
+    }
+
+    /// 唤起后补显示积压的提示：面板不可见期间的事件（大图丢弃/授权变化）+ 数据库告警。
+    private func showDeferredNotices() {
+        if let n = pendingNotice {
+            pendingNotice = nil
+            showToast(n.text, actionTitle: n.actionTitle, action: n.action, duration: n.duration)
+        } else if store.dbUnavailable && !didWarnDBUnavailable {
+            didWarnDBUnavailable = true
+            showToast("历史数据库不可用，本次记录只保存在内存，退出后会丢失", duration: 8)
+        }
+    }
+
+    /// 就地提示：面板可见立即 toast；不可见暂存，下次唤起补显示。
+    private func notice(_ text: String, actionTitle: String? = nil,
+                        action: (() -> Void)? = nil, duration: TimeInterval = 4) {
+        if panel.isVisible {
+            showToast(text, actionTitle: actionTitle, action: action, duration: duration)
+        } else {
+            pendingNotice = (text, actionTitle, action, duration)
         }
     }
 
     func hide() {
+        // 刻意无退场动画（与 140ms 入场不对称）：粘贴完成的瞬间用户要的是「立刻让开」，
+        // 任何退场编排都是在挡视线。
         preview.hide()
         hideToast()
         removeKeyMonitor()
+        pendingQuickPaste = nil
         panel.orderOut(nil)
     }
 
@@ -857,6 +1002,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             guard let self, self.panel.isVisible else { return event }
             let cmdDown = event.modifierFlags.contains(.command)
             self.hintLabel.stringValue = cmdDown ? self.hintFull : self.hintShort
+            self.layoutHintPill()             // 胶囊宽度跟随文本伸缩
             self.updateIndexBadges(cmdDown)   // 前 9 张卡叠直达编号，⌘1-9 有了可视映射
             return event
         }
@@ -899,8 +1045,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 case .search: return event                     // 交还给输入框移动光标
                 }
                 return nil
-            case 126: if self.focusZone == .cards { self.setZone(.tabs) }; return nil   // ↑ 上到顶部
-            case 125: if self.focusZone != .cards { self.setZone(.cards) }; return nil  // ↓ 回卡片
+            case 126:                                           // ↑ 预览开着滚预览；否则上到顶部
+                if self.preview.isVisible { self.preview.scrollText(by: -44) }
+                else if self.focusZone == .cards { self.setZone(.tabs) }
+                return nil
+            case 125:                                           // ↓ 预览开着滚预览；否则回卡片
+                if self.preview.isVisible { self.preview.scrollText(by: 44) }
+                else if self.focusZone != .cards { self.setZone(.cards) }
+                return nil
             case 36, 76:                                        // return / enter
                 if self.focusZone == .tabs {
                     self.setZone(.cards)                        // 标签区回车 → 切到卡片区
@@ -922,7 +1074,11 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 }
                 return nil
             case 35 where cmd: self.togglePinSelected(); return nil   // ⌘P
-            case 8 where cmd: self.copySelected(); return nil         // ⌘C 仅复制（不粘贴不关面板）
+            case 8 where cmd:                                   // ⌘C：搜索框有选中文字时让位给系统复制
+                if let ed = self.searchField.currentEditor(), ed.selectedRange.length > 0 {
+                    return event
+                }
+                self.copySelected(); return nil                 // 否则复制选中卡片（不粘贴不关面板）
             case 51 where cmd: self.deleteSelected(); return nil      // ⌘⌫
             case 6 where cmd: self.undoDelete(); return nil           // ⌘Z 撤销删除
             default: return event
@@ -1007,6 +1163,16 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         if preview.isVisible, filtered.indices.contains(i) {   // 预览开着：跟随选择切换内容
             preview.show(filtered[i], above: panel)
         }
+        // VoiceOver 焦点同步：键盘 first responder 始终在搜索框，VO 光标不会自己跟过来，
+        // 选中变化必须主动播报，否则 VO 用户听不到「当前选到哪张」。
+        if NSWorkspace.shared.isVoiceOverEnabled {
+            NSAccessibility.post(element: cardStrip as Any, notification: .selectedChildrenChanged)
+            if let label = cardViews[i].accessibilityLabel() {
+                NSAccessibility.post(element: panel as Any, notification: .announcementRequested,
+                                     userInfo: [.announcement: label,
+                                                .priority: NSAccessibilityPriorityLevel.medium.rawValue])
+            }
+        }
     }
 
     /// 空格预览开关（选中项）。
@@ -1017,14 +1183,23 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     }
 
     private func pasteSelected(plain: Bool) {
-        guard filtered.indices.contains(selectedIndex) else { return }
+        guard filtered.indices.contains(selectedIndex) else {
+            // 唤起后卡片还没建好（快手 ⏎ 比下一拍的 refilter 还快）：暂存，建好立即补执行
+            if !store.items.isEmpty, Date().timeIntervalSince(shownAt) < 1.0 {
+                pendingQuickPaste = plain
+            }
+            return
+        }
         let item = filtered[selectedIndex]
         guard Paster.hasAccessibilityPermission else {
             // 内容照样进剪贴板，但不收面板：让用户看到失败原因，而不是静默消失。
             onCopyOnly?(item, plain)
             showToast("已复制，但自动粘贴需要「辅助功能」权限",
                       actionTitle: "打开设置",
-                      action: { Paster.openAccessibilitySettings() },
+                      action: { [weak self] in
+                          Paster.openAccessibilitySettings()
+                          self?.startAXWatch()   // 盯授权变化：授予后主动提示（含可能的重启）
+                      },
                       duration: 8)
             return
         }
@@ -1062,31 +1237,80 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         showToast("已恢复")
     }
 
+    // MARK: - 辅助功能授权链路
+
+    /// 首启教学时刻的「第 0 步」：面板已自动唤起、用户零风险，正是配置权限的最佳时机；
+    /// 不做则推迟到首次粘贴失败——那是最高压的时刻。AppDelegate 在首启自动唤起后调用。
+    func showPermissionOnboardingIfNeeded() {
+        guard panel.isVisible, !Paster.hasAccessibilityPermission else { return }
+        showToast("按 ⏎ 直接粘贴需要「辅助功能」权限，建议现在配置好",
+                  actionTitle: "打开设置",
+                  action: { [weak self] in
+                      Paster.openAccessibilitySettings()
+                      self?.startAXWatch()
+                  },
+                  duration: 12)
+    }
+
+    /// 打开设置后每秒轮询授权状态（上限 3 分钟）：授予后主动告知，并给「立即重启」出路——
+    /// 运行中授予的权限对 CGEvent 的抑制可能要重启才解除，没人提示就是 toast 死循环。
+    private func startAXWatch() {
+        guard axWatchTimer == nil, !Paster.hasAccessibilityPermission else { return }
+        var ticks = 0
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] t in
+            guard let self else { t.invalidate(); return }
+            ticks += 1
+            if Paster.hasAccessibilityPermission {
+                self.stopAXWatch()
+                self.notice("已获得辅助功能权限；若 ⏎ 粘贴仍无反应，重启一次即可生效",
+                            actionTitle: "立即重启",
+                            action: { Paster.relaunchApp() },
+                            duration: 10)
+            } else if ticks >= 180 {
+                self.stopAXWatch()
+            }
+        }
+        timer.tolerance = 0.3
+        RunLoop.main.add(timer, forMode: .common)
+        axWatchTimer = timer
+    }
+
+    private func stopAXWatch() {
+        axWatchTimer?.invalidate()
+        axWatchTimer = nil
+    }
+
     // MARK: - 面板内轻提示（toast）
 
-    /// 在卡片区上方居中显示一条轻提示，可带一个动作按钮。用于粘贴失败归因、删除撤销等反馈。
+    /// 轻提示。短的纯文本提示（已复制/已删除…）内联进工具条 hint 位——工具条本就是状态区，
+    /// 不遮任何卡片；长文案或带动作按钮的（权限引导等）仍用卡片区上方的浮层。
     private func showToast(_ text: String, actionTitle: String? = nil,
                            action: (() -> Void)? = nil, duration: TimeInterval = 4) {
         hideToast()
+        let inline = actionTitle == nil && text.count <= 18
         let container = NSView()
         container.wantsLayer = true
-        container.layer?.cornerRadius = Metrics.radiusL    // 浮出表面，与卡片同圆角
         container.layer?.backgroundColor = theme.cardBG.withAlphaComponent(0.97).cgColor
         container.layer?.borderWidth = 1
         container.layer?.borderColor = theme.accentGlow.cgColor
-        container.layer?.shadowColor = theme.cardShadow.cgColor
-        container.layer?.shadowOpacity = 0.3
-        container.layer?.shadowRadius = 10
-        container.layer?.shadowOffset = CGSize(width: 0, height: -2)
 
-        let h: CGFloat = 32
+        let h: CGFloat = inline ? 24 : 32
+        let padX: CGFloat = inline ? 10 : 14
+        container.layer?.cornerRadius = inline ? 6 : Metrics.radiusL
+        if !inline {
+            container.layer?.shadowColor = theme.cardShadow.cgColor
+            container.layer?.shadowOpacity = 0.3
+            container.layer?.shadowRadius = 10
+            container.layer?.shadowOffset = CGSize(width: 0, height: -2)
+        }
+
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: Typo.body)
+        label.font = .systemFont(ofSize: inline ? Typo.caption : Typo.body)
         label.textColor = theme.cardFG
         label.sizeToFit()
-        label.setFrameOrigin(NSPoint(x: 14, y: (h - label.frame.height) / 2))
+        label.setFrameOrigin(NSPoint(x: padX, y: (h - label.frame.height) / 2))
         container.addSubview(label)
-        var w = 14 + label.frame.width + 14
+        var w = padX + label.frame.width + padX
 
         if let actionTitle {
             toastAction = action
@@ -1100,9 +1324,16 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             w += btn.frame.width + 10
         }
 
-        let panelW = panel.frame.width
-        container.frame = NSRect(x: (panelW - w) / 2, y: shelfHeight - toolbarH - h - 12,
-                                 width: w, height: h)
+        if inline {
+            // 内联：顶掉 hint 胶囊的位置，右对齐在条数左缘
+            hintPill.isHidden = true
+            let yc = shelfHeight - toolbarH / 2
+            let rightEdge = panel.frame.width - 148 - 10
+            container.frame = NSRect(x: rightEdge - w, y: yc - h / 2, width: w, height: h)
+        } else {
+            container.frame = NSRect(x: (panel.frame.width - w) / 2, y: shelfHeight - toolbarH - h - 12,
+                                     width: w, height: h)
+        }
         blur.addSubview(container)
         toastView = container
 
@@ -1116,7 +1347,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         } else {
             container.alphaValue = 0
             NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = 0.15
+                ctx.duration = Motion.toastIn
                 container.animator().alphaValue = 1
             }
         }
@@ -1136,6 +1367,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         toastAction = nil
         toastView?.removeFromSuperview()
         toastView = nil
+        if hintPill != nil { hintPill.isHidden = false }   // 内联 toast 归还 hint 位
     }
 
     // MARK: - 过滤 / 数据
@@ -1158,7 +1390,11 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         let q = searchField.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
         currentQuery = q
-        let base = showPinnedOnly ? store.items.filter { $0.pinned } : store.displayItems
+        // 常用页按收藏时间倒序：位置只随收藏/移出变化（⌘1-9 成为事实上的稳定槽位），
+        // 重新复制某条常用不会把它顶到最前扰乱肌肉记忆；旧数据无收藏时间用剪贴时间兜底。
+        let base = showPinnedOnly
+            ? store.items.filter { $0.pinned }.sorted { ($0.pinnedAt ?? $0.date) > ($1.pinnedAt ?? $1.date) }
+            : store.displayItems
         filtered = q.isEmpty ? base : base.filter { $0.matches(q) }   // 子串 + 拼音全拼/首字母
 
         countLabel.stringValue = filtered.isEmpty ? ""
@@ -1167,7 +1403,11 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                : "\(filtered.count) 条")
         emptyLabel.isHidden = !filtered.isEmpty
         if !q.isEmpty {
-            emptyLabel.stringValue = "无匹配结果 · esc 清空搜索"
+            // 有截图还在 OCR 队列里时给归因：让用户能区分「没有」和「还没识别完」
+            let pending = store.pendingOCR.count
+            emptyLabel.stringValue = pending > 0
+                ? "无匹配结果 · 还有 \(pending) 张截图文字识别中 · esc 清空搜索"
+                : "无匹配结果 · esc 清空搜索"
         } else {
             emptyLabel.stringValue = showPinnedOnly
                 ? "暂无常用 · 选中卡片按 ⌘P 收藏"

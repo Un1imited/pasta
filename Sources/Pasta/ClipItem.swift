@@ -51,6 +51,7 @@ struct ClipItem: Codable, Identifiable {
     var rtfData: Data?      // text 类型的富文本版本（用于「保留格式」粘贴）
     var imageData: Data?    // image 类型的 PNG，仅运行时持有；持久化在独立文件（v2），不入 JSON
     var pinned: Bool
+    var pinnedAt: Date?           // 收藏时间：常用页按它排序（位置稳定，不随重新复制扰动）
     var date: Date
     var sourceBundleID: String?   // 复制来源 App 的 bundle id（卡片右上角徽标用）
     var ocrText: String?          // 图片的 OCR 识别文本（Vision 本地识别，仅参与搜索不参与显示）
@@ -63,6 +64,7 @@ struct ClipItem: Codable, Identifiable {
         self.rtfData = rtfData
         self.imageData = imageData
         self.pinned = pinned
+        self.pinnedAt = pinned ? Date() : nil
         self.date = Date()
         self.sourceBundleID = sourceBundleID
         self.ocrText = nil
@@ -76,6 +78,7 @@ struct ClipItem: Codable, Identifiable {
         self.rtfData = nil
         self.imageData = nil
         self.pinned = pinned
+        self.pinnedAt = nil          // 由 loadAll 从 pinned_at 列回填
         self.date = date
         self.sourceBundleID = sourceBundleID
         self.ocrText = nil
@@ -89,7 +92,7 @@ struct ClipItem: Codable, Identifiable {
     // MARK: - Codable（imageData 不编码；解码保留以兼容 v1 内联格式的迁移）
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, text, rtfData, imageData, pinned, date, sourceBundleID
+        case id, kind, text, rtfData, imageData, pinned, pinnedAt, date, sourceBundleID
     }
 
     init(from decoder: Decoder) throws {
@@ -101,6 +104,8 @@ struct ClipItem: Codable, Identifiable {
         imageData = try c.decodeIfPresent(Data.self, forKey: .imageData)   // v1 旧文件的内联图片
         pinned = try c.decode(Bool.self, forKey: .pinned)
         date = try c.decode(Date.self, forKey: .date)
+        // 旧 JSON 无收藏时间：已收藏的用剪贴时间冻结为收藏时间
+        pinnedAt = try c.decodeIfPresent(Date.self, forKey: .pinnedAt) ?? (pinned ? date : nil)
         sourceBundleID = try c.decodeIfPresent(String.self, forKey: .sourceBundleID)
         ocrText = nil   // 旧 JSON 无此字段；迁移后由启动回填补算
     }
@@ -113,6 +118,7 @@ struct ClipItem: Codable, Identifiable {
         try c.encodeIfPresent(rtfData, forKey: .rtfData)
         // imageData 刻意不编码：图片落 images/<id>.png，避免 base64 膨胀 + 每次保存全量重编码
         try c.encode(pinned, forKey: .pinned)
+        try c.encodeIfPresent(pinnedAt, forKey: .pinnedAt)
         try c.encode(date, forKey: .date)
         try c.encodeIfPresent(sourceBundleID, forKey: .sourceBundleID)
     }

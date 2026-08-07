@@ -23,9 +23,25 @@ enum Paster {
     }
 
     /// 打开系统设置的「隐私与安全性 → 辅助功能」页。
+    /// 先带弹窗调用一次授权检查：确保 Pasta 出现在辅助功能列表里
+    /// （从未申请过的 App 不在列表中，用户到了设置页也无从勾选）。
     static func openAccessibilitySettings() {
+        ensureAccessibilityPermission(prompt: true)
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
+    }
+
+    /// 重启 App：授权在运行中授予后，TCC 对 CGEvent 的抑制可能要重启才解除。
+    /// 延迟 1 秒再拉起新实例，避开单实例锁的退出竞态（第二实例撞锁会弹窗退出）。
+    static func relaunchApp() {
+        let path = Bundle.main.bundlePath
+        if path.hasSuffix(".app") {
+            let sh = Process()
+            sh.executableURL = URL(fileURLWithPath: "/bin/sh")
+            sh.arguments = ["-c", "sleep 1; /usr/bin/open -n \"\(path)\""]
+            try? sh.run()
+        }
+        NSApp.terminate(nil)   // swift run 等非 .app 形态：只退出，由使用者自行再跑
     }
 
     /// 模拟一次 ⌘V。
