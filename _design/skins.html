@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>Pasta · 皮肤总览（7 套）</title>
+<style>
+/* ============================================================
+   Pasta 皮肤总览 · 与 Sources/Pasta/Theme.swift 同步（2026-08-10）
+   ------------------------------------------------------------
+   7 套 = 原四套（已含优化：午夜青/晨光启用 typeTints、晨光 hover
+   加深、纯墨描边 8%、晶蓝转冰青）+ 新三套（青提/蜜柑/晴日）。
+   决策过程见文末档案摘要。色值即 Theme.swift 落码值。
+   ============================================================ */
+:root{
+  --doc-bg:#101317;--doc-panel:#171b21;--doc-line:rgba(255,255,255,.08);
+  --doc-fg:rgba(255,255,255,.92);--doc-dim:rgba(255,255,255,.55);--doc-faint:rgba(255,255,255,.38);
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --sys:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--doc-bg);color:var(--doc-fg);font-family:var(--sys);-webkit-font-smoothing:antialiased;padding:64px 0 100px}
+.wrap{width:1400px;margin:0 auto}
+.doc-kicker{font-family:var(--mono);font-size:12px;letter-spacing:.35em;color:#189EF2;margin-bottom:14px}
+.doc-title{font-size:40px;font-weight:700}
+.doc-sub{margin-top:12px;font-size:14.5px;color:var(--doc-dim);line-height:1.75;max-width:880px}
+.doc-sub strong{color:var(--doc-fg)}
+section{margin-top:64px}
+.sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--doc-line);padding-bottom:12px;margin-bottom:14px}
+.sec-num{font-family:var(--mono);font-size:13px;color:#189EF2}
+.sec-title{font-size:23px;font-weight:700}
+.sec-id{font-family:var(--mono);font-size:12px;color:var(--doc-faint)}
+.sec-note{margin-left:auto;font-size:12px;color:var(--doc-faint)}
+.rationale{font-size:13.5px;color:var(--doc-dim);line-height:1.8;max-width:920px;margin:0 0 16px}
+.rationale em{color:var(--doc-fg);font-style:normal;font-weight:600}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{display:flex;align-items:center;gap:7px;background:var(--doc-panel);border:1px solid var(--doc-line);border-radius:7px;padding:6px 10px}
+.chip .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.15)}
+.chip .nm{font-size:11.5px;color:var(--doc-dim)}
+.chip .hx{font-family:var(--mono);font-size:10.5px;color:var(--doc-faint)}
+
+/* ---------- 面板骨架（真实尺度） ---------- */
+.stage{border-radius:12px;overflow:hidden;border:1px solid var(--doc-line)}
+.desktop{height:100px}
+.shelf{position:relative;border-top:1px solid var(--top-edge)}
+.shelf .bgfill{position:absolute;inset:0;background:var(--shelf)}
+.shelf .glowfill{position:absolute;inset:0;background:radial-gradient(720px 130px at 50% -40px,var(--glow),transparent 70%)}
+.shelf>*{position:relative}
+.toolbar{height:48px;display:flex;align-items:center;padding:0 16px;gap:14px}
+.search{display:flex;align-items:center;gap:8px;color:var(--stext);font-size:16px;width:280px}
+.search svg{width:15px;height:15px;stroke:var(--stext);fill:none;stroke-width:2}
+.tabs{display:flex;gap:6px}
+.tab{font-size:12px;color:var(--stext);padding:5px 13px;border-radius:7px}
+.tab.on{background:var(--acc-wash);color:var(--acc-text);box-shadow:inset 0 0 0 1px var(--acc-line)}
+.count{margin-left:auto;font-size:11px;color:var(--stext)}
+.cards{display:flex;gap:16px;padding:6px 16px 16px;overflow:hidden}
+.card{width:214px;height:250px;flex:none;background:var(--card);border-radius:12px;position:relative;
+  border:1px solid var(--card-border);box-shadow:var(--card-shadow);padding:12px}
+.card.sel{border:1.5px solid var(--accent);box-shadow:0 0 0 3px var(--acc-ring),var(--card-shadow)}
+.card .meta{display:flex;align-items:center;gap:6px;color:var(--card-dim);font-size:11px}
+.card .meta .type{color:var(--tp-fg,var(--acc-text));background:var(--tp-wash,transparent);font-weight:600;padding:1px 4px;border-radius:3px}
+.card .meta .appdot{margin-left:auto;width:14px;height:14px;border-radius:4px}
+.card .body{margin-top:9px;color:var(--card-fg);font-size:14px;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.card .body.mono{font-family:var(--mono);font-size:12.5px}
+.card .body.link{color:var(--acc-text);text-decoration:underline}
+.card .body.big{font-size:14px;font-weight:500}
+.card .foot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;justify-content:space-between;color:var(--card-faint);font-size:11px}
+.card .thumb{margin-top:9px;height:130px;border-radius:6px;background:linear-gradient(150deg,#3d5d84,#5f83ad);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);position:relative;overflow:hidden}
+.card .thumb i{position:absolute;left:12px;right:12px;height:5px;border-radius:2px;background:rgba(255,255,255,.5)}
+.hintbar{height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--stext);
+  background:var(--hint-bg);border-top:1px solid var(--hint-line)}
+.hintbar b{color:var(--ptext);font-weight:600}
+
+/* ============ 1 · 午夜青 midnight（默认） ============ */
+.t-mid{--shelf:rgba(38,43,54,.42);--top-edge:rgba(255,255,255,.16);--glow:rgba(24,158,242,.13);
+  --ptext:rgba(255,255,255,.95);--stext:rgba(255,255,255,.55);
+  --accent:#189EF2;--acc-text:#189EF2;--acc-wash:rgba(24,158,242,.16);--acc-line:rgba(24,158,242,.45);--acc-ring:rgba(24,158,242,.30);
+  --card:#2C2E35;--card-fg:rgba(255,255,255,.94);--card-dim:rgba(255,255,255,.62);--card-faint:rgba(255,255,255,.50);
+  --card-border:rgba(255,255,255,.10);--card-shadow:0 6px 14px rgba(0,0,0,.36);
+  --hint-bg:rgba(0,0,0,.22);--hint-line:rgba(255,255,255,.06)}
+.t-mid .desktop{background:linear-gradient(160deg,#1d2c38 0%,#14202c 55%,#0d151e 100%)}
+
+/* ============ 2 · 晨光 daylight ============ */
+.t-day{--shelf:rgba(232,237,244,.74);--top-edge:rgba(255,255,255,.95);--glow:rgba(18,116,178,.10);
+  --ptext:rgba(0,0,0,.85);--stext:rgba(0,0,0,.62);
+  --accent:#1274B2;--acc-text:#1274B2;--acc-wash:rgba(18,116,178,.10);--acc-line:rgba(18,116,178,.45);--acc-ring:rgba(18,116,178,.22);
+  --card:#FFFFFF;--card-fg:#1C1C1E;--card-dim:rgba(0,0,0,.62);--card-faint:rgba(0,0,0,.54);
+  --card-border:rgba(0,30,70,.08);--card-shadow:0 4px 12px rgba(20,45,85,.18);
+  --hint-bg:rgba(0,0,0,.04);--hint-line:rgba(0,0,0,.07)}
+.t-day .desktop{background:linear-gradient(160deg,#b9c9d8 0%,#d3dde6 55%,#e8edf2 100%)}
+
+/* ============ 3 · 纯墨 ink（OLED） ============ */
+.t-ink{--shelf:rgba(0,0,0,.78);--top-edge:rgba(255,255,255,.10);--glow:rgba(232,201,122,.06);
+  --ptext:rgba(255,255,255,.93);--stext:rgba(255,255,255,.52);
+  --accent:#E8C97A;--acc-text:#E8C97A;--acc-wash:rgba(232,201,122,.13);--acc-line:rgba(232,201,122,.45);--acc-ring:rgba(232,201,122,.26);
+  --card:#1D1D20;--card-fg:rgba(255,255,255,.93);--card-dim:rgba(255,255,255,.60);--card-faint:rgba(255,255,255,.48);
+  --card-border:rgba(255,255,255,.08);--card-shadow:0 8px 18px rgba(0,0,0,.55);
+  --hint-bg:rgba(0,0,0,.4);--hint-line:rgba(255,255,255,.04)}
+.t-ink .desktop{background:linear-gradient(160deg,#17130e 0%,#0c0a08 60%,#000 100%)}
+
+/* ============ 4 · 晶蓝 glass（冰青玻璃拟态） ============ */
+.t-gls{--top-edge:rgba(255,255,255,.22);--glow:rgba(88,204,224,.16);
+  --ptext:rgba(255,255,255,.95);--stext:rgba(210,224,245,.85);
+  --accent:#58CCE0;--acc-text:#58CCE0;--acc-wash:rgba(88,204,224,.16);--acc-line:rgba(88,204,224,.45);--acc-ring:rgba(88,204,224,.30);
+  --card:rgba(26,38,61,.60);--card-fg:rgba(255,255,255,.92);--card-dim:rgba(210,224,245,.80);--card-faint:rgba(210,224,245,.65);
+  --card-border:rgba(255,255,255,.14);--card-shadow:0 6px 16px rgba(0,0,0,.34);
+  --hint-bg:rgba(0,0,0,.20);--hint-line:rgba(255,255,255,.08)}
+.t-gls .desktop{background:linear-gradient(160deg,#33475c 0%,#22303f 55%,#141b24 100%)}
+.t-gls .shelf .bgfill{background:linear-gradient(90deg,rgba(20,24,31,.92) 0%,rgba(28,39,64,.92) 36%,rgba(38,72,95,.92) 62%,rgba(33,48,74,.92) 100%)}
+
+/* ============ 5 · 青提 candy ============ */
+.t-can{--shelf:rgba(255,249,236,.92);--top-edge:rgba(255,255,255,.75);--glow:rgba(0,160,110,.20);
+  --ptext:#223129;--stext:#526258;
+  --accent:#00A06E;--acc-text:#007A54;--acc-wash:rgba(0,160,110,.12);--acc-line:rgba(0,160,110,.45);--acc-ring:rgba(0,160,110,.28);
+  --card:#FFFFFF;--card-fg:#223129;--card-dim:#66746B;--card-faint:#68766C;
+  --card-border:#EDE6D4;--card-shadow:0 4px 12px rgba(87,74,40,.12);
+  --hint-bg:rgba(87,74,40,.05);--hint-line:rgba(87,74,40,.09)}
+.t-can .desktop{background:linear-gradient(160deg,#c9d8c2 0%,#dde6d2 55%,#efeadd 100%)}
+
+/* ============ 6 · 蜜柑 tangerine ============ */
+.t-tan{--top-edge:rgba(255,255,255,.78);--glow:rgba(255,158,64,.30);
+  --ptext:#2A3D4C;--stext:#485760;
+  --accent:#E06900;--acc-text:#9C4A00;--acc-wash:rgba(224,105,0,.10);--acc-line:rgba(224,105,0,.45);--acc-ring:rgba(224,105,0,.28);
+  --card:rgba(255,255,255,.92);--card-fg:#2A3D4C;--card-dim:#52616B;--card-faint:#66737B;
+  --card-border:rgba(150,110,60,.24);--card-shadow:0 4px 12px rgba(122,74,18,.10);
+  --hint-bg:rgba(122,74,18,.05);--hint-line:rgba(122,74,18,.09)}
+.t-tan .desktop{background:linear-gradient(160deg,#d8c4b0 0%,#e6d6c2 55%,#f2e6d5 100%)}
+.t-tan .shelf .bgfill{background:linear-gradient(90deg,rgba(255,233,196,.88) 0%,rgba(255,246,214,.88) 36%,rgba(255,244,228,.88) 68%,rgba(255,228,206,.88) 100%)}
+
+/* ============ 7 · 晴日 sunny ============ */
+.t-sun{--top-edge:rgba(255,255,255,.75);--glow:rgba(255,203,88,.30);
+  --ptext:#2E2618;--stext:#61553D;
+  --accent:#087FA0;--acc-text:#076B86;--acc-wash:rgba(8,127,160,.10);--acc-line:rgba(8,127,160,.45);--acc-ring:rgba(8,127,160,.28);
+  --card:rgba(255,254,247,.92);--card-fg:#2E2618;--card-dim:#6B6047;--card-faint:#7E7357;
+  --card-border:rgba(46,38,24,.10);--card-shadow:0 4px 12px rgba(122,94,40,.10);
+  --hint-bg:rgba(122,94,40,.05);--hint-line:rgba(122,94,40,.09)}
+.t-sun .desktop{background:linear-gradient(160deg,#c2d5dd 0%,#dbe4d8 55%,#efe8d2 100%)}
+.t-sun .shelf .bgfill{background:linear-gradient(90deg,rgba(255,238,190,.90) 0%,rgba(255,248,230,.86) 32%,rgba(238,249,252,.86) 66%,rgba(226,244,250,.90) 100%)}
+</style></head><body>
+
+<div class="wrap">
+  <div>
+    <div class="doc-kicker">PASTA · SKINS OVERVIEW</div>
+    <div class="doc-title">皮肤总览 <span style="font-weight:300;color:var(--doc-dim)">· 7 套 · 与 Theme.swift 同步</span></div>
+    <p class="doc-sub">原四套（<strong>已含 2026-08 优化</strong>：午夜青/晨光启用类型分色、晨光 hover 加深、纯墨描边 8%、晶蓝转冰青）
+    + 新三套明媚系（青提/蜜柑/晴日）。通用机制：<strong>typeTints</strong>（链接/图片/邮箱类型词分色，wash 淡底 + AA 字色）、
+    <strong>accentText</strong>(亮 accent 的文字级深档）。所有色值即落码值；对比度实算注释在 Theme.swift。</p>
+  </div>
+
+  <section class="t-mid">
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">午夜青</h2><span class="sec-id">midnight · 默认 · 深</span><span class="sec-note">品牌蓝本色 · 类型三色分流</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="mid"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#262B36"></span><span class="nm">面板</span><span class="hx">#262B36 @.42</span></div>
+      <div class="chip"><span class="sw" style="background:#2C2E35"></span><span class="nm">卡</span><span class="hx">#2C2E35</span></div>
+      <div class="chip"><span class="sw" style="background:#189EF2"></span><span class="nm">accent · 品牌蓝</span><span class="hx">#189EF2</span></div>
+      <div class="chip"><span class="sw" style="background:#6FBFF5"></span><span class="nm">链接</span><span class="hx">#6FBFF5</span></div>
+      <div class="chip"><span class="sw" style="background:#E8B45C"></span><span class="nm">图片</span><span class="hx">#E8B45C</span></div>
+      <div class="chip"><span class="sw" style="background:#6FD3A8"></span><span class="nm">邮箱</span><span class="hx">#6FD3A8</span></div>
+    </div>
+  </section>
+
+  <section class="t-day">
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">晨光</h2><span class="sec-id">daylight · 浅</span><span class="sec-note">hover #E9F0F9 · 类型三色分流</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="day"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#E8EDF4"></span><span class="nm">面板</span><span class="hx">#E8EDF4 @.74</span></div>
+      <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="nm">卡</span><span class="hx">#FFFFFF · hover #E9F0F9</span></div>
+      <div class="chip"><span class="sw" style="background:#1274B2"></span><span class="nm">accent · 深蓝</span><span class="hx">#1274B2</span></div>
+      <div class="chip"><span class="sw" style="background:#8A6400"></span><span class="nm">图片</span><span class="hx">#8A6400/#FFF1C9</span></div>
+      <div class="chip"><span class="sw" style="background:#147A5C"></span><span class="nm">邮箱</span><span class="hx">#147A5C/#DFF4EC</span></div>
+      <div class="chip"><span class="sw" style="background:#B07E00"></span><span class="nm">pin 琥珀</span><span class="hx">#B07E00</span></div>
+    </div>
+  </section>
+
+  <section class="t-ink">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">纯墨</h2><span class="sec-id">ink · OLED</span><span class="sec-note">描边 8% · 一色金纪律（刻意无类型分色）</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#000"></span><span class="nm">面板</span><span class="hx">#000 @.78</span></div>
+      <div class="chip"><span class="sw" style="background:#1D1D20"></span><span class="nm">卡</span><span class="hx">#1D1D20 · 边 white@.08</span></div>
+      <div class="chip"><span class="sw" style="background:#E8C97A"></span><span class="nm">accent · OLED 金</span><span class="hx">#E8C97A</span></div>
+    </div>
+  </section>
+
+  <section class="t-gls">
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">晶蓝</h2><span class="sec-id">glass · 深 · 渐变玻璃</span><span class="sec-note">冰青 accent（191°，与午夜青拉开）</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#14181f,#1c2740,#26485F,#21304a)"></span><span class="nm">面板渐变</span><span class="hx">#14181F→#26485F→#21304A @.92</span></div>
+      <div class="chip"><span class="sw" style="background:rgba(26,38,61,.85)"></span><span class="nm">玻璃卡</span><span class="hx">#1A263D @.60</span></div>
+      <div class="chip"><span class="sw" style="background:#58CCE0"></span><span class="nm">accent · 冰青</span><span class="hx">#58CCE0</span></div>
+    </div>
+  </section>
+
+  <section class="t-can">
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">青提</h2><span class="sec-id">candy · 浅 · 新增</span><span class="sec-note">Duolingo 糖果流派 · 糖果胶囊分色</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="can"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#FFF9EC"></span><span class="nm">奶油面板</span><span class="hx">#FFF9EC @.92</span></div>
+      <div class="chip"><span class="sw" style="background:#00A06E"></span><span class="nm">accent · 青提绿</span><span class="hx">#00A06E · 文字档 #007A54</span></div>
+      <div class="chip"><span class="sw" style="background:#0E6E96"></span><span class="nm">链接 · 苏打天青</span><span class="hx">#0E6E96/#DFF3FB</span></div>
+      <div class="chip"><span class="sw" style="background:#7A5A00"></span><span class="nm">图片 · 柠檬</span><span class="hx">#7A5A00/#FFF1BF</span></div>
+      <div class="chip"><span class="sw" style="background:#0A7247"></span><span class="nm">邮箱 · 薄荷</span><span class="hx">#0A7247/#DCF5E9</span></div>
+    </div>
+  </section>
+
+  <section class="t-tan">
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">蜜柑</h2><span class="sec-id">tangerine · 浅 · 新增</span><span class="sec-note">Headspace 迁移 · 橙管情绪墨青管信息</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="tan"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#FFE9C4,#FFF6D6,#FFF4E4,#FFE4CE)"></span><span class="nm">晨光渐变</span><span class="hx">蜜杏→柠檬奶油→蜜桃雾 @.88</span></div>
+      <div class="chip"><span class="sw" style="background:#E06900"></span><span class="nm">accent · 蜜柑橙（图形）</span><span class="hx">#E06900 · 文字档 #9C4A00</span></div>
+      <div class="chip"><span class="sw" style="background:#2A3D4C"></span><span class="nm">墨青正文</span><span class="hx">#2A3D4C</span></div>
+      <div class="chip"><span class="sw" style="background:#0C6E6E"></span><span class="nm">链接 · 湖青</span><span class="hx">#0C6E6E/#D9F3EF</span></div>
+      <div class="chip"><span class="sw" style="background:#8A5716"></span><span class="nm">图片 · 蜜杏</span><span class="hx">#8A5716/#FFEBCF</span></div>
+      <div class="chip"><span class="sw" style="background:#20713C"></span><span class="nm">邮箱 · 嫩叶</span><span class="hx">#20713C/#DFF5DF</span></div>
+    </div>
+  </section>
+
+  <section class="t-sun">
+    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec-title">晴日</h2><span class="sec-id">sunny · 浅 · 新增</span><span class="sec-note">Susan Kare 谱系 · 糖纸三色贴纸</span></div>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="sun"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#FFEEBE,#FFF8E6,#EEF9FC,#E2F4FA)"></span><span class="nm">晨曦→天青渐变</span><span class="hx">#FFEEBE→#E2F4FA</span></div>
+      <div class="chip"><span class="sw" style="background:#087FA0"></span><span class="nm">accent · 晴空天青</span><span class="hx">#087FA0 · 文字档 #076B86</span></div>
+      <div class="chip"><span class="sw" style="background:#2E2618"></span><span class="nm">墨仁棕正文</span><span class="hx">#2E2618</span></div>
+      <div class="chip"><span class="sw" style="background:#096344"></span><span class="nm">链接 · 薄荷</span><span class="hx">#096344/#D9F6E5</span></div>
+      <div class="chip"><span class="sw" style="background:#8F3D10"></span><span class="nm">图片 · 蜜桃</span><span class="hx">#8F3D10/#FFE4D3</span></div>
+      <div class="chip"><span class="sw" style="background:#6B5200"></span><span class="nm">邮箱 · 奶油</span><span class="hx">#6B5200/#FFF1BE</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-num">08</span><h2 class="sec-title">决策档案摘要</h2></div>
+    <p class="rationale">2026-08-10 皮肤评审 + 两轮三方向探索：第一轮（油印紫/玫瑰石墨/特殊色）被否——「都不太行，有没有明媚一点或者活泼一点的色系」；
+    第二轮明媚系三版获全数采纳——「都还不错，都做进来吧」；老四套优化对照稿获批——「可以直接落地」。
+    落码新增机制：<em>typeTints</em>（类型词分色，空=旧行为）、<em>accentText</em>（亮 accent 文字级深档，nil=旧行为）。
+    对比度实算与设计出处注释均在 Theme.swift 内。</p>
+  </section>
+</div>
+
+<script>
+const APPS={chrome:"conic-gradient(from 0deg,#ea4335,#fbbc05,#34a853,#4285f4,#ea4335)",
+  term:"#3a3f45",xcode:"linear-gradient(140deg,#5bc0f8,#2f6ef2)",notes:"linear-gradient(180deg,#ffd60a,#ffb800)",
+  mail:"linear-gradient(180deg,#59b6f8,#1f7ce0)"};
+const TINTS={
+  mid:{"链接":["#6FBFF5","rgba(111,191,245,.14)"],"图片":["#E8B45C","rgba(232,180,92,.14)"],"邮箱":["#6FD3A8","rgba(111,211,168,.14)"]},
+  day:{"链接":["#1274B2","#E3F0FB"],"图片":["#8A6400","#FFF1C9"],"邮箱":["#147A5C","#DFF4EC"]},
+  can:{"链接":["#0E6E96","#DFF3FB"],"图片":["#7A5A00","#FFF1BF"],"邮箱":["#0A7247","#DCF5E9"]},
+  tan:{"链接":["#0C6E6E","#D9F3EF"],"图片":["#8A5716","#FFEBCF"],"邮箱":["#20713C","#DFF5DF"]},
+  sun:{"链接":["#096344","#D9F6E5"],"图片":["#8F3D10","#FFE4D3"],"邮箱":["#6B5200","#FFF1BE"]}
+};
+const CARDS=[
+  {type:"链接",time:"刚刚",app:"chrome",src:"Chrome",n:"27 字符",body:"github.com/Un1imited/pasta",cls:"link",sel:true},
+  {time:"2 分钟前",app:"term",src:"终端",n:"10 字符",body:"./build.sh",cls:"mono big"},
+  {type:"图片",time:"8 分钟前",app:"xcode",src:"Xcode",n:"1280×720",thumb:true},
+  {time:"12 分钟前",app:"notes",src:"备忘录",n:"14 字符",body:"Hello, world! 👋",cls:"big"},
+  {type:"邮箱",time:"20 分钟前",app:"mail",src:"邮件",n:"14 字符",body:"hi@example.com",cls:"mono"},
+  {time:"1 小时前",app:"term",src:"终端",n:"86 字符",body:"SELECT id, name FROM users WHERE created_at > now() - interval 7 day ORDER BY id DESC",cls:"mono"}
+];
+function card(d,tints){
+  let style="";
+  if(d.type&&tints&&tints[d.type]) style=`style="--tp-fg:${tints[d.type][0]};--tp-wash:${tints[d.type][1]}"`;
+  let h=`<div class="card${d.sel?" sel":""}" ${style}><div class="meta">`;
+  if(d.type)h+=`<span class="type">${d.type}</span>`;
+  h+=`<span>${d.time}</span><span class="appdot" style="background:${APPS[d.app]}"></span></div>`;
+  h+=d.thumb?`<div class="thumb"><i style="top:16px;width:60%"></i><i style="top:32px"></i><i style="top:46px"></i><i style="top:60px"></i><i style="top:74px;width:70%"></i><i style="top:88px"></i><i style="top:102px;width:55%"></i></div>`
+            :`<div class="body ${d.cls||""}">${d.body}</div>`;
+  h+=`<div class="foot"><span>${d.src}</span><span>${d.n}</span></div></div>`;
+  return h;
+}
+document.querySelectorAll("[data-shelf]").forEach(el=>{
+  el.innerHTML=CARDS.map(d=>card(d,TINTS[el.dataset.tints]||null)).join("");
+});
+</script>
+</body></html>

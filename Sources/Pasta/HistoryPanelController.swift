@@ -176,7 +176,7 @@ final class ClipCardView: NSView {
         var searchFrom = lower.startIndex
         while let r = lower.range(of: q, range: searchFrom..<lower.endIndex) {
             attr.addAttributes([
-                .foregroundColor: theme.accent,
+                .foregroundColor: theme.accentTextColor,   // 亮 accent 主题（蜜柑橙）自动落到文字级深档
                 .backgroundColor: theme.accent.withAlphaComponent(0.16),
             ], range: NSRange(r, in: body))
             searchFrom = r.upperBound
@@ -188,8 +188,13 @@ final class ClipCardView: NSView {
     private func applyMeta(_ item: ClipItem) {
         if item.showsKindInHeader {
             let s = NSMutableAttributedString()
-            s.append(NSAttributedString(string: item.kindLabel,
-                attributes: [.foregroundColor: theme.accent, .font: NSFont.systemFont(ofSize: Typo.caption, weight: .semibold)]))
+            // 类型词：有 typeTints 的主题走「糖纸贴纸」分色（字色+淡底），否则 accent 文字级单色
+            let tint = theme.typeTints[item.kindLabel]
+            var kindAttrs: [NSAttributedString.Key: Any] = [
+                .foregroundColor: tint?.fg ?? theme.accentTextColor,
+                .font: NSFont.systemFont(ofSize: Typo.caption, weight: .semibold)]
+            if let wash = tint?.wash { kindAttrs[.backgroundColor] = wash }
+            s.append(NSAttributedString(string: item.kindLabel, attributes: kindAttrs))
             s.append(NSAttributedString(string: " · \(item.relativeTime)",
                 attributes: [.foregroundColor: theme.cardDim, .font: NSFont.systemFont(ofSize: Typo.caption)]))
             metaLabel.attributedStringValue = s
@@ -489,7 +494,7 @@ final class PillTabControl: NSView {
             // 选中/未选中都用 semibold 测宽（init 时按 semibold 算），避免切换时文字抖动
             b.attributedTitle = NSAttributedString(string: titles[i], attributes: [
                 .font: NSFont.systemFont(ofSize: Typo.control, weight: on ? .semibold : .regular),
-                .foregroundColor: on ? theme.accent : theme.secondaryText,
+                .foregroundColor: on ? theme.accentTextColor : theme.secondaryText,
             ])
             b.setAccessibilityLabel(on ? "\(titles[i])，已选中" : titles[i])
         }
