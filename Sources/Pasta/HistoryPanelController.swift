@@ -1058,13 +1058,12 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 if self.preview.isVisible { self.preview.scrollText(by: 44) }
                 else if self.focusZone != .cards { self.setZone(.cards) }
                 return nil
-            case 36, 76:                                        // return / enter
-                if self.focusZone == .tabs {
-                    self.setZone(.cards)                        // 标签区回车 → 切到卡片区
-                } else {
-                    let plain = Settings.shared.plainTextPaste || event.modifierFlags.contains(.option)
-                    self.pasteSelected(plain: plain)           // 搜索/卡片区回车 → 粘贴选中项
-                }
+            case 36, 76:                                        // return / enter → 一律粘贴选中项
+                // 标签区不例外：切完 tab 直接回车是最常见的连贯动作，选中卡始终可见，
+                // 「回车只切区不粘贴」会被当成粘贴失灵（进入卡片区交给 ↓）。
+                if self.focusZone == .tabs { self.setZone(.cards) }   // 视觉归位（无权限时面板不关，焦点应在卡片区）
+                let plain = Settings.shared.plainTextPaste || event.modifierFlags.contains(.option)
+                self.pasteSelected(plain: plain)
                 return nil
             case 49 where self.searchField.stringValue.isEmpty:  // 空格：Quick Look 式预览（有查询时空格归输入框）
                 self.togglePreview()
