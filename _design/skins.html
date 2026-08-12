@@ -224,9 +224,9 @@ section{margin-top:64px}
       <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#FFEEBE,#FFF8E6,#EEF9FC,#E2F4FA)"></span><span class="nm">晨曦→天青渐变</span><span class="hx">#FFEEBE→#E2F4FA</span></div>
       <div class="chip"><span class="sw" style="background:#087FA0"></span><span class="nm">accent · 晴空天青</span><span class="hx">#087FA0 · 文字档 #076B86</span></div>
       <div class="chip"><span class="sw" style="background:#2E2618"></span><span class="nm">墨仁棕正文</span><span class="hx">#2E2618</span></div>
-      <div class="chip"><span class="sw" style="background:#096344"></span><span class="nm">链接 · 薄荷</span><span class="hx">#096344/#D9F6E5</span></div>
+      <div class="chip"><span class="sw" style="background:#076B86"></span><span class="nm">链接 · 天青</span><span class="hx">#076B86/#D9F1F8</span></div>
       <div class="chip"><span class="sw" style="background:#8F3D10"></span><span class="nm">图片 · 蜜桃</span><span class="hx">#8F3D10/#FFE4D3</span></div>
-      <div class="chip"><span class="sw" style="background:#6B5200"></span><span class="nm">邮箱 · 奶油</span><span class="hx">#6B5200/#FFF1BE</span></div>
+      <div class="chip"><span class="sw" style="background:#096344"></span><span class="nm">邮箱 · 薄荷</span><span class="hx">#096344/#D9F6E5</span></div>
     </div>
   </section>
 
@@ -236,6 +236,10 @@ section{margin-top:64px}
     第二轮明媚系三版获全数采纳——「都还不错，都做进来吧」；老四套优化对照稿获批——「可以直接落地」。
     落码新增机制：<em>typeTints</em>（类型词分色，空=旧行为）、<em>accentText</em>（亮 accent 文字级深档，nil=旧行为）。
     对比度实算与设计出处注释均在 Theme.swift 内。</p>
+    <p class="rationale">2026-08-12 设计评审补丁：三套新皮肤 hover 实测 1.01–1.04 不可辨（同晨光修复前问题），
+    分别加深至薄荷 #E6F4EB / 蜜杏 #FAEDD8 / 晨曦金 #FBEFC9（可辨比 1.11–1.14）；
+    晴日类型色语义归位（链接=天青 #076B86、邮箱=薄荷 #096344，全家族「蓝青=链接、琥珀=图片、绿=邮箱」对齐）；
+    偏好主题下拉按深/浅分组。</p>
   </section>
 </div>
 
@@ -248,7 +252,7 @@ const TINTS={
   day:{"链接":["#1274B2","#E3F0FB"],"图片":["#8A6400","#FFF1C9"],"邮箱":["#147A5C","#DFF4EC"]},
   can:{"链接":["#0E6E96","#DFF3FB"],"图片":["#7A5A00","#FFF1BF"],"邮箱":["#0A7247","#DCF5E9"]},
   tan:{"链接":["#0C6E6E","#D9F3EF"],"图片":["#8A5716","#FFEBCF"],"邮箱":["#20713C","#DFF5DF"]},
-  sun:{"链接":["#096344","#D9F6E5"],"图片":["#8F3D10","#FFE4D3"],"邮箱":["#6B5200","#FFF1BE"]}
+  sun:{"链接":["#076B86","#D9F1F8"],"图片":["#8F3D10","#FFE4D3"],"邮箱":["#096344","#D9F6E5"]}
 };
 const CARDS=[
   {type:"链接",time:"刚刚",app:"chrome",src:"Chrome",n:"27 字符",body:"github.com/Un1imited/pasta",cls:"link",sel:true},

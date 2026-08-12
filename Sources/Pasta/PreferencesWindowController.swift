@@ -23,9 +23,13 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         ("500 条", 500), ("1000 条", 1000), ("2000 条", 2000), ("5000 条", 5000),
     ]
 
-    /// 主题下拉的选项：跟随系统 + 全部具名主题。
-    private let themeOptions: [(id: String, name: String)] =
-        [(Theme.autoID, "跟随系统（午夜青 / 晨光）")] + Theme.all.map { ($0.id, $0.name) }
+    /// 主题下拉按深/浅分组（7 套平铺超出「每决策点 ≤4」，分组降选择负担）；
+    /// id 存 representedObject——分隔线会打乱索引，不能按下标映射。
+    private let themeGroups: [[(id: String, name: String)]] = [
+        [(Theme.autoID, "跟随系统（午夜青 / 晨光）")],
+        [Theme.midnight, Theme.glass, Theme.ink].map { ($0.id, $0.name) },          // 深色
+        [Theme.daylight, Theme.candy, Theme.tangerine, Theme.sunny].map { ($0.id, $0.name) },   // 浅色
+    ]
 
     init() {
         let window = NSWindow(
@@ -75,12 +79,17 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         rowExpire.alignment = .top
         let rowLimit = NSStackView(views: [label("历史容量"), limitPopup])
 
-        for (id, name) in themeOptions {
-            themePopup.addItem(withTitle: name)
-            // 色板预览：不唤面板也能看到主题长相；「跟随系统」用深浅拼半
-            themePopup.lastItem?.image = id == Theme.autoID
-                ? Self.splitSwatch(dark: .midnight, light: .daylight)
-                : Self.swatch(for: Theme.by(id: id))
+        for (gi, group) in themeGroups.enumerated() {
+            if gi > 0 { themePopup.menu?.addItem(.separator()) }
+            for (id, name) in group {
+                themePopup.addItem(withTitle: name)
+                let item = themePopup.lastItem
+                item?.representedObject = id
+                // 色板预览：不唤面板也能看到主题长相；「跟随系统」用深浅拼半
+                item?.image = id == Theme.autoID
+                    ? Self.splitSwatch(dark: .midnight, light: .daylight)
+                    : Self.swatch(for: Theme.by(id: id))
+            }
         }
         themePopup.target = self
         themePopup.action = #selector(themeChanged)
@@ -349,14 +358,15 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         let limit = Settings.shared.maxHistoryItems
         let lIdx = limitOptions.firstIndex { $0.count == limit } ?? (limitOptions.count - 1)
         limitPopup.selectItem(at: lIdx)
-        let tIdx = themeOptions.firstIndex { $0.id == Settings.shared.themeID } ?? 1  // 找不到时退到午夜青
-        themePopup.selectItem(at: tIdx)
+        let currentID = Settings.shared.themeID
+        let match = themePopup.itemArray.first { $0.representedObject as? String == currentID }
+            ?? themePopup.itemArray.first { $0.representedObject as? String == Theme.midnight.id }  // 找不到时退到午夜青
+        if let match { themePopup.select(match) }
     }
 
     @objc private func themeChanged() {
-        let idx = themePopup.indexOfSelectedItem
-        guard themeOptions.indices.contains(idx) else { return }
-        Settings.shared.themeID = themeOptions[idx].id
+        guard let id = themePopup.selectedItem?.representedObject as? String else { return }
+        Settings.shared.themeID = id
     }
 
     @objc private func plainChanged() {
