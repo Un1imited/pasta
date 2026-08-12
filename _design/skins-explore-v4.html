@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>Pasta · 皮肤探索 v4（Apple 语言三方向）</title>
+<style>
+/* ============================================================
+   Pasta 皮肤探索 · 第四轮（2026-08-12）· apple-design 镜头 · 探索稿未落码
+   ------------------------------------------------------------
+   缺口分析（对照 Apple 设计语言）：
+   ① Agency——五套全是静态调色板，没有一套把颜色交给用户
+      （macOS 系统强调色：蓝/紫/粉/红/橙/黄/绿/石墨）→ 01 随色
+   ② 真材质——亮侧没有真透明（晨光 0.74 近实）→ 02 轻霜
+   ③ 零色相 pro 气质（经典 graphite，与夜青的蓝、纯墨的金区分）→ 03 石墨
+   重复度预警：03 与夜青/纯墨同为深色系，眯眼测试风险中等，诚实标注。
+   本稿玻璃段用真 backdrop-filter 合成，桌面透底是真实效果。
+   ============================================================ */
+:root{
+  --doc-bg:#101317;--doc-panel:#171b21;--doc-line:rgba(255,255,255,.08);
+  --doc-fg:rgba(255,255,255,.92);--doc-dim:rgba(255,255,255,.55);--doc-faint:rgba(255,255,255,.38);
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --sys:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--doc-bg);color:var(--doc-fg);font-family:var(--sys);-webkit-font-smoothing:antialiased;padding:64px 0 100px}
+.wrap{width:1400px;margin:0 auto}
+.doc-kicker{font-family:var(--mono);font-size:12px;letter-spacing:.35em;color:#189EF2;margin-bottom:14px}
+.doc-title{font-size:40px;font-weight:700}
+.doc-sub{margin-top:12px;font-size:14.5px;color:var(--doc-dim);line-height:1.75;max-width:920px}
+.doc-sub strong{color:var(--doc-fg)}
+section{margin-top:64px}
+.sec-head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--doc-line);padding-bottom:12px;margin-bottom:14px}
+.sec-num{font-family:var(--mono);font-size:13px;color:#189EF2}
+.sec-title{font-size:23px;font-weight:700}
+.sec-id{font-family:var(--mono);font-size:12px;color:var(--doc-faint)}
+.sec-note{margin-left:auto;font-size:12px;color:var(--doc-faint)}
+.rationale{font-size:13.5px;color:var(--doc-dim);line-height:1.8;max-width:920px;margin:0 0 16px}
+.rationale em{color:var(--doc-fg);font-style:normal;font-weight:600}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.chip{display:flex;align-items:center;gap:7px;background:var(--doc-panel);border:1px solid var(--doc-line);border-radius:7px;padding:6px 10px}
+.chip .sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.15)}
+.chip .nm{font-size:11.5px;color:var(--doc-dim)}
+.chip .hx{font-family:var(--mono);font-size:10.5px;color:var(--doc-faint)}
+.accent-row{display:flex;gap:6px;align-items:center;margin-left:4px}
+.accent-row i{width:14px;height:14px;border-radius:50%;border:1px solid rgba(255,255,255,.2)}
+
+/* ---------- 面板骨架（v4：桌面垫底 + 真 backdrop-filter 玻璃） ---------- */
+.stage{border-radius:12px;overflow:hidden;border:1px solid var(--doc-line);position:relative}
+.stage .desktop{position:absolute;inset:0}
+.stage .spacer{height:100px}
+.shelf{position:relative;border-top:1px solid var(--top-edge);
+  background:var(--shelf);backdrop-filter:blur(26px) saturate(140%);-webkit-backdrop-filter:blur(26px) saturate(140%)}
+.shelf .glowfill{position:absolute;inset:0;background:radial-gradient(720px 130px at 50% -40px,var(--glow),transparent 70%);pointer-events:none}
+.shelf>*{position:relative}
+.toolbar{height:48px;display:flex;align-items:center;padding:0 16px;gap:14px}
+.search{display:flex;align-items:center;gap:8px;color:var(--stext);font-size:16px;width:280px}
+.search svg{width:15px;height:15px;stroke:var(--stext);fill:none;stroke-width:2}
+.tabs{display:flex;gap:6px}
+.tab{font-size:12px;color:var(--stext);padding:5px 13px;border-radius:7px}
+.tab.on{background:var(--acc-wash);color:var(--acc-text);box-shadow:inset 0 0 0 1px var(--acc-line);font-weight:600}
+.count{margin-left:auto;font-size:11px;color:var(--stext);font-weight:var(--meta-weight,400)}
+.cards{display:flex;gap:16px;padding:6px 16px 16px;overflow:hidden}
+.card{width:214px;height:250px;flex:none;background:var(--card);border-radius:12px;position:relative;
+  border:1px solid var(--card-border);box-shadow:var(--card-shadow);padding:12px}
+.card.sel{border:1.5px solid var(--accent);box-shadow:0 0 0 3px var(--acc-ring),var(--card-shadow)}
+.card .meta{display:flex;align-items:center;gap:6px;color:var(--card-dim);font-size:11px}
+.card .meta .type{color:var(--tp-fg,var(--acc-text));background:var(--tp-wash,transparent);font-weight:600;padding:1px 4px;border-radius:3px}
+.card .meta .appdot{margin-left:auto;width:14px;height:14px;border-radius:4px}
+.card .body{margin-top:9px;color:var(--card-fg);font-size:14px;line-height:1.5;
+  display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.card .body.mono{font-family:var(--mono);font-size:12.5px}
+.card .body.link{color:var(--acc-text);text-decoration:underline}
+.card .body.big{font-size:14px;font-weight:500}
+.card .foot{position:absolute;left:12px;right:12px;bottom:10px;display:flex;justify-content:space-between;color:var(--card-faint);font-size:11px}
+.card .thumb{margin-top:9px;height:130px;border-radius:6px;background:linear-gradient(150deg,#3d5d84,#5f83ad);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);position:relative;overflow:hidden}
+.card .thumb i{position:absolute;left:12px;right:12px;height:5px;border-radius:2px;background:rgba(255,255,255,.5)}
+.hintbar{height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--stext);
+  background:var(--hint-bg);border-top:1px solid var(--hint-line)}
+.hintbar b{color:var(--ptext);font-weight:600}
+
+/* ============ 01 · 随色 accent（跟随系统强调色 · 示例紫） ============ */
+.t-sc{--shelf:rgba(242,243,245,.72);--top-edge:rgba(255,255,255,.92);--glow:rgba(125,79,190,.10);
+  --ptext:#232529;--stext:#4C4F55;
+  --accent:#7D4FBE;--acc-text:#5E3792;--acc-wash:rgba(125,79,190,.10);--acc-line:rgba(125,79,190,.45);--acc-ring:rgba(125,79,190,.24);
+  --card:#FFFFFF;--card-fg:#232529;--card-dim:#55585F;--card-faint:#66696F;
+  --card-border:rgba(35,37,41,.09);--card-shadow:0 4px 12px rgba(30,32,40,.14);
+  --hint-bg:rgba(35,37,41,.04);--hint-line:rgba(35,37,41,.08)}
+.t-sc .desktop{background:linear-gradient(160deg,#b4a8cf 0%,#cabfd9 45%,#e0dbe8 100%)}
+
+/* ============ 02 · 轻霜 frost（亮超薄玻璃 · 真透明浅色） ============ */
+.t-qs{--shelf:rgba(255,255,255,.55);--top-edge:rgba(255,255,255,.95);--glow:rgba(18,116,178,.08);
+  --ptext:#1F2429;--stext:#33393F;--meta-weight:500;
+  --accent:#1274B2;--acc-text:#0F639A;--acc-wash:rgba(18,116,178,.12);--acc-line:rgba(18,116,178,.45);--acc-ring:rgba(18,116,178,.22);
+  --card:#FFFFFF;--card-fg:#1F2429;--card-dim:#4E555C;--card-faint:#5F666D;
+  --card-border:rgba(20,40,60,.10);--card-shadow:0 4px 12px rgba(20,45,85,.16);
+  --hint-bg:rgba(255,255,255,.30);--hint-line:rgba(20,40,60,.08)}
+.t-qs .desktop{background:linear-gradient(150deg,#e8734a 0%,#d9975c 30%,#7fae9b 65%,#4a7d9e 100%)}
+
+/* ============ 03 · 石墨 graphite（零色相 pro · 冷银一色纪律） ============ */
+.t-shm{--shelf:rgba(40,40,44,.60);--top-edge:rgba(255,255,255,.14);--glow:rgba(200,204,210,.07);
+  --ptext:rgba(255,255,255,.94);--stext:rgba(255,255,255,.58);
+  --accent:#C8CCD2;--acc-text:#C8CCD2;--acc-wash:rgba(200,204,210,.13);--acc-line:rgba(200,204,210,.40);--acc-ring:rgba(200,204,210,.26);
+  --card:#2F2F33;--card-fg:rgba(255,255,255,.93);--card-dim:rgba(255,255,255,.62);--card-faint:rgba(255,255,255,.50);
+  --card-border:rgba(255,255,255,.10);--card-shadow:0 6px 16px rgba(0,0,0,.42);
+  --hint-bg:rgba(0,0,0,.24);--hint-line:rgba(255,255,255,.06)}
+.t-shm .desktop{background:linear-gradient(160deg,#3c3f45 0%,#2b2d32 55%,#1c1e22 100%)}
+</style></head><body>
+
+<div class="wrap">
+  <div>
+    <div class="doc-kicker">PASTA · SKINS EXPLORE · ROUND 4 · APPLE LENS</div>
+    <div class="doc-title">皮肤探索 <span style="font-weight:300;color:var(--doc-dim)">· Apple 语言三方向 · 探索稿未落码</span></div>
+    <p class="doc-sub">用 Apple 设计语言找缺口：现有五套全是<strong>静态调色板</strong>——① 没有一套把颜色交给用户（<strong>Agency</strong>：跟随系统强调色）；
+    ② 亮侧没有<strong>真材质</strong>（晨光 0.74 近实，真透明只有夜青一套）；③ 零色相的 graphite pro 气质空缺。
+    玻璃段为真 backdrop-filter 合成，透底是真实效果。</p>
+  </div>
+
+  <section class="t-sc">
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">随色</h2><span class="sec-id">accent · 浅 · 机制型</span><span class="sec-note">Apple 第 2 原则 Agency：颜色是用户的，不是皮肤的</span></div>
+    <p class="rationale">中性无色相的底 + <em>accent 完全取自系统强调色</em>（系统设置里的 蓝/紫/粉/红/橙/黄/绿/石墨）——用户改系统强调色，
+    Pasta 跟着换。运行时把强调色自动压深到文字级 ≥4.5:1（accentText 派生），类型分色让位关闭（一色纪律：色彩属于用户）。
+    下方示例为「紫」。<span class="accent-row">全部可能：<i style="background:#0A82FF"></i><i style="background:#7D4FBE"></i><i style="background:#E85D8A"></i><i style="background:#E0383E"></i><i style="background:#F7821B"></i><i style="background:#FFC600"></i><i style="background:#62BA46"></i><i style="background:#8C8C91"></i></span></p>
+    <div class="stage"><div class="desktop"></div><div class="spacer"></div><div class="shelf"><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf></div><div class="hintbar"><span><b>↩</b> 粘贴 · 按住 <b>⌘</b> 全部快捷键</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#F2F3F5"></span><span class="nm">中性底（chroma≈0）</span><span class="hx">#F2F3F5 @.72</span></div>
+      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#0A82FF,#7D4FBE,#E85D8A,#F7821B,#62BA46)"></span><span class="nm">accent = 系统强调色</span><span class="hx">运行时读取 + 对比度保底派生</span></div>
+      <div class="chip"><span class="sw" style="background:#FFFFFF"></span><span class="nm">白实卡</span><span class="hx">#FFFFFF</span></div>
+    </div>
+  </section>
+
+  <section class="t-qs">
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec-title">轻霜</h2><span class="sec-id">frost · 浅 · 真材质</span><span class="sec-note">亮侧第一套真透明 · 桌面颜色即氛围</span></div>
+    <p class="rationale">白 @0.55 的<em>超薄亮玻璃</em>——比晨光（0.74）薄一个档位，壁纸的颜色真的透进工具条（上方示例里透出暖橙与湖蓝）。
+    代价与对策都按 Apple 规范：工具条文字压到深墨 + medium 字重（vibrancy 补偿，已有机制），卡片保持白实卡（不犯浅透明叠浅透明的禁区）。
+    暗壁纸最不利合成实算过：0.55 白 over 纯黑 ≈ 中灰，深墨 secondaryText 仍 ≥4.5。</p>
+    <div class="stage"><div class="desktop"></div><div class="spacer"></div><div class="shelf"><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="qs"></div><div class="hintbar"><span><b>↩</b> 粘贴 · 按住 <b>⌘</b> 全部快捷键</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.15)"></span><span class="nm">超薄亮玻璃</span><span class="hx">white @.55 + blur26</span></div>
+      <div class="chip"><span class="sw" style="background:#1274B2"></span><span class="nm">accent · 品牌蓝</span><span class="hx">#1274B2（与晨光同族，材质区分）</span></div>
+      <div class="chip"><span class="sw" style="background:#33393F"></span><span class="nm">工具条深墨 + medium</span><span class="hx">#33393F · vibrancy 补偿</span></div>
+    </div>
+  </section>
+
+  <section class="t-shm">
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec-title">石墨</h2><span class="sec-id">graphite · 深 · 零色相</span><span class="sec-note">⚠ 重复度预警：与夜青/纯墨同深色系，眯眼测试风险中等</span></div>
+    <p class="rationale">经典 Apple graphite：<em>chroma=0 的中深灰</em>（非 OLED 黑）+ 冷银一色纪律（连 accent 都是石墨银 #C8CCD2），
+    pro 工具气质。与夜青的区别是零色相（夜青有 203° 蓝底噪）、与纯墨的区别是中灰底 + 冷银 vs 纯黑 + 暖金。
+    诚实预警：三套深色并存时缩略图辨识度会下降——如果选它，建议同时考虑要不要给深色区再收敛。</p>
+    <div class="stage"><div class="desktop"></div><div class="spacer"></div><div class="shelf"><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf></div><div class="hintbar"><span><b>↩</b> 粘贴 · 按住 <b>⌘</b> 全部快捷键</span></div></div></div>
+    <div class="chips">
+      <div class="chip"><span class="sw" style="background:#28282C"></span><span class="nm">石墨底</span><span class="hx">#28282C @.60</span></div>
+      <div class="chip"><span class="sw" style="background:#2F2F33"></span><span class="nm">石墨卡</span><span class="hx">#2F2F33</span></div>
+      <div class="chip"><span class="sw" style="background:#C8CCD2"></span><span class="nm">accent · 冷银</span><span class="hx">#C8CCD2（零色相一色纪律）</span></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const APPS={chrome:"conic-gradient(from 0deg,#ea4335,#fbbc05,#34a853,#4285f4,#ea4335)",
+  term:"#3a3f45",xcode:"linear-gradient(140deg,#5bc0f8,#2f6ef2)",notes:"linear-gradient(180deg,#ffd60a,#ffb800)",
+  mail:"linear-gradient(180deg,#59b6f8,#1f7ce0)"};
+const TINTS={
+  qs:{"链接":["#0F639A","#E4EFF8"],"图片":["#8A6400","#FFF1C9"],"邮箱":["#147A5C","#DFF4EC"]}
+};
+const CARDS=[
+  {type:"链接",time:"刚刚",app:"chrome",src:"Chrome",n:"27 字符",body:"github.com/Un1imited/pasta",cls:"link",sel:true},
+  {time:"2 分钟前",app:"term",src:"终端",n:"10 字符",body:"./build.sh",cls:"mono big"},
+  {type:"图片",time:"8 分钟前",app:"xcode",src:"Xcode",n:"1280×720",thumb:true},
+  {time:"12 分钟前",app:"notes",src:"备忘录",n:"14 字符",body:"Hello, world! 👋",cls:"big"},
+  {type:"邮箱",time:"20 分钟前",app:"mail",src:"邮件",n:"14 字符",body:"hi@example.com",cls:"mono"},
+  {time:"1 小时前",app:"term",src:"终端",n:"86 字符",body:"SELECT id, name FROM users WHERE created_at > now() - interval 7 day ORDER BY id DESC",cls:"mono"}
+];
+function card(d,tints){
+  let style="";
+  if(d.type&&tints&&tints[d.type]) style=`style="--tp-fg:${tints[d.type][0]};--tp-wash:${tints[d.type][1]}"`;
+  let h=`<div class="card${d.sel?" sel":""}" ${style}><div class="meta">`;
+  if(d.type)h+=`<span class="type">${d.type}</span>`;
+  h+=`<span>${d.time}</span><span class="appdot" style="background:${APPS[d.app]}"></span></div>`;
+  h+=d.thumb?`<div class="thumb"><i style="top:16px;width:60%"></i><i style="top:32px"></i><i style="top:46px"></i><i style="top:60px"></i><i style="top:74px;width:70%"></i><i style="top:88px"></i><i style="top:102px;width:55%"></i></div>`
+            :`<div class="body ${d.cls||""}">${d.body}</div>`;
+  h+=`<div class="foot"><span>${d.src}</span><span>${d.n}</span></div></div>`;
+  return h;
+}
+document.querySelectorAll("[data-shelf]").forEach(el=>{
+  el.innerHTML=CARDS.map(d=>card(d,TINTS[el.dataset.tints]||null)).join("");
+});
+</script>
+</body></html>

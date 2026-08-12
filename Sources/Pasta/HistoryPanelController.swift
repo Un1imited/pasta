@@ -37,6 +37,7 @@ final class ClipCardView: NSView {
     private var item: ClipItem?          // 拖出（drag-out）取内容用
     private var mouseDownEvent: NSEvent?
     private var dragStarted = false
+    private var pressed = false          // 按压态：press 瞬间 0.982 快落，release 弹簧回
 
     static let cardW: CGFloat = 152
     static let cardH: CGFloat = 212
@@ -176,7 +177,7 @@ final class ClipCardView: NSView {
         var searchFrom = lower.startIndex
         while let r = lower.range(of: q, range: searchFrom..<lower.endIndex) {
             attr.addAttributes([
-                .foregroundColor: theme.accentTextColor,   // 亮 accent 主题（蜜柑橙）自动落到文字级深档
+                .foregroundColor: theme.accentTextColor,   // 亮 accent 主题（如随色的黄/亮蓝）自动落到文字级深档
                 .backgroundColor: theme.accent.withAlphaComponent(0.16),
             ], range: NSRange(r, in: body))
             searchFrom = r.upperBound
@@ -211,8 +212,8 @@ final class ClipCardView: NSView {
         countLabel.textColor = theme.cardFaint
         ocrBadge.contentTintColor = theme.cardFaint
         pinView.contentTintColor = theme.pinColor
-        headerLine.fillColor = theme.cardBorder
-        footerLine.fillColor = theme.cardBorder
+        headerLine.fillColor = theme.cardBorderEffective
+        footerLine.fillColor = theme.cardBorderEffective
         topHi.layer?.backgroundColor = theme.cardInsetHi.cgColor
     }
 
@@ -223,13 +224,53 @@ final class ClipCardView: NSView {
         applyState(animated: true)
     }
 
-    /// 按住 ⌘ 时显示直达编号（1-9），nil 隐藏。
-    func setIndexBadge(_ n: Int?) {
-        guard let n else { indexBadge.isHidden = true; return }
+    /// 按住 ⌘：直达角标 stagger 入场（scale 0.4→1 弹簧 + 渐显；从左到右的波浪
+    /// 本身就是「编号从左数起」的教学，§8 方向暗示）。
+    func showIndexBadge(_ n: Int, delay: TimeInterval) {
         indexBadge.stringValue = "\(n)"
         indexBadge.textColor = theme.onAccent   // 白字在亮 accent 上最低只有 1.6:1，按主题取配对色
         indexBadge.layer?.backgroundColor = theme.accent.cgColor
         indexBadge.isHidden = false
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              let l = indexBadge.layer else { return }
+        let s = CASpringAnimation(keyPath: "transform")
+        s.mass = 1; s.stiffness = 631.7; s.damping = 50.3   // response 0.25
+        s.fromValue = NSValue(caTransform3D: CATransform3DMakeScale(0.4, 0.4, 1))
+        s.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        let o = CABasicAnimation(keyPath: "opacity")
+        o.fromValue = 0; o.toValue = 1; o.duration = 0.15
+        let g = CAAnimationGroup()
+        g.animations = [s, o]
+        g.duration = max(s.settlingDuration, 0.15)
+        g.beginTime = CACurrentMediaTime() + delay
+        g.fillMode = .backwards            // 延迟期间保持 from 值（不可见），到点起跳
+        l.add(g, forKey: "badgein")
+    }
+
+    /// 松开 ⌘：全部同帧快速渐隐——退场不表演。
+    func hideIndexBadge() {
+        guard !indexBadge.isHidden else { return }
+        indexBadge.layer?.removeAnimation(forKey: "badgein")
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              let l = indexBadge.layer else { indexBadge.isHidden = true; return }
+        let o = CABasicAnimation(keyPath: "opacity")
+        o.fromValue = l.presentation()?.opacity ?? 1
+        o.toValue = 0
+        o.duration = 0.1
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            self?.indexBadge.isHidden = true
+            self?.indexBadge.layer?.opacity = 1
+        }
+        l.add(o, forKey: "badgeout")
+        l.opacity = 0
+        CATransaction.commit()
+        // 补一手模型值复位：completion 可能因视图复用被跳过
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, self.indexBadge.layer?.opacity == 0 else { return }
+            self.indexBadge.isHidden = true
+            self.indexBadge.layer?.opacity = 1
+        }
     }
 
     /// 计算并应用卡片当前状态（选中 / hover / 普通），animated 时做 0.14s 平滑过渡。
@@ -237,7 +278,7 @@ final class ClipCardView: NSView {
         let hot = hovering && !selected
         let selBorder = selFocused ? theme.accent : theme.cardDim
         let cardBG = hot ? theme.cardHoverBG : theme.cardBG
-        let border = selected ? selBorder : theme.cardBorder
+        let border = selected ? selBorder : theme.cardBorderEffective
         let borderW: CGFloat = selected ? 2 : 1
 
         let shColor: CGColor, shOpacity: Float, shRadius: CGFloat, shOffset: CGSize
@@ -259,10 +300,20 @@ final class ClipCardView: NSView {
         animate("shadowRadius", shRadius as NSNumber, animated)
         layer?.shadowOffset = shOffset
 
-        // hover 轻微放大（绕中心），并抬到最上层避免被邻卡盖住；系统开了减弱动态则不缩放
+        // hover 轻微放大（绕中心），并抬到最上层避免被邻卡盖住；按压态优先（0.982 快落）；
+        // 系统开了减弱动态则不缩放
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let scale: CGFloat = (hot && !reduceMotion) ? Motion.hoverScale : 1.0
-        animate("transform", NSValue(caTransform3D: centeredScale(scale)), animated)
+        let scale: CGFloat
+        if reduceMotion { scale = 1.0 }
+        else if pressed { scale = Motion.pressScale }
+        else if hot { scale = Motion.hoverScale }
+        else { scale = 1.0 }
+        let tVal = NSValue(caTransform3D: centeredScale(scale))
+        if pressed {
+            animateQuick("transform", tVal, animated)   // 按压要快于回弹（0.1s 直落）
+        } else {
+            animate("transform", tVal, animated)        // 回弹走弹簧
+        }
         layer?.zPosition = hot ? 1 : 0
     }
 
@@ -277,16 +328,46 @@ final class ClipCardView: NSView {
     }
 
     /// 给单个 layer 属性加显式过渡动画（layer-backed view 默认不做隐式动画）。
+    /// 从 presentation value 出发 → 中途打断不跳变。transform 走临界阻尼弹簧
+    /// （运动属性用弹簧、颜色/投影用 easeOut——弹簧对颜色插值无物理意义）。
     /// 系统「减弱动态效果」开启时直接落值，不做过渡。
     private func animate(_ key: String, _ value: Any?, _ animated: Bool) {
         guard let layer else { return }
         if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            let a = CABasicAnimation(keyPath: key)
-            a.fromValue = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
-            a.toValue = value
-            a.duration = Motion.state
-            a.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            let from = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
+            let a: CAAnimation
+            if key == "transform" {
+                let s = CASpringAnimation(keyPath: key)
+                s.mass = 1
+                s.stiffness = Motion.springStiffness
+                s.damping = Motion.springDamping
+                s.fromValue = from
+                s.toValue = value
+                s.duration = s.settlingDuration
+                a = s
+            } else {
+                let b = CABasicAnimation(keyPath: key)
+                b.fromValue = from
+                b.toValue = value
+                b.duration = Motion.state
+                b.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                a = b
+            }
             layer.add(a, forKey: "state_" + key)
+        }
+        layer.setValue(value, forKeyPath: key)
+    }
+
+    /// 快落动画（按压下压用）：0.1s easeOut，从 presentation value 出发。
+    private func animateQuick(_ key: String, _ value: Any?, _ animated: Bool) {
+        guard let layer else { return }
+        if animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let b = CABasicAnimation(keyPath: key)
+            b.fromValue = layer.presentation()?.value(forKeyPath: key) ?? layer.value(forKeyPath: key)
+            b.toValue = value
+            b.duration = Motion.pressIn
+            b.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(b, forKey: "state_" + key)
         }
         layer.setValue(value, forKeyPath: key)
     }
@@ -357,7 +438,15 @@ final class ClipCardView: NSView {
     override func mouseDown(with event: NSEvent) {
         mouseDownEvent = event
         dragStarted = false
+        pressed = true                    // 反馈生在 press 瞬间（§1 Response）
         if event.clickCount >= 2 { onActivate?() } else { onSelect?() }
+        applyState(animated: true)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        pressed = false
+        applyState(animated: true)        // release：弹簧回 hover/常态
+        super.mouseUp(with: event)
     }
 
     // MARK: - 拖出（drag-out）
@@ -368,8 +457,10 @@ final class ClipCardView: NSView {
         guard !dragStarted, let down = mouseDownEvent else { return }
         let dist = hypot(event.locationInWindow.x - down.locationInWindow.x,
                          event.locationInWindow.y - down.locationInWindow.y)
-        guard dist > 5 else { return }
+        guard dist > 9 else { return }   // 滞回 ~10pt（HIG 手势细则）：草率点击不误入拖拽会话
         dragStarted = true
+        pressed = false                   // 进入拖拽会话：取消按压态
+        applyState(animated: true)
         let writers = dragWriters()
         guard !writers.isEmpty else { return }
         let snapshot = cardSnapshot()
@@ -442,6 +533,9 @@ final class PillTabControl: NSView {
     private let titles: [String]
     private var buttons: [NSButton] = []
     private var theme = Theme.current
+    /// 选中指示器：一个持续存在、可被打断重定向的物体（§4 行为而非动画），
+    /// 在标签之间弹簧滑动，而非两次跳变。
+    private let indicator = CALayer()
     private let padH: CGFloat = 14
     private let btnH: CGFloat = 26
     private let btnGap: CGFloat = 4
@@ -449,13 +543,14 @@ final class PillTabControl: NSView {
     init(titles: [String]) {
         self.titles = titles
         super.init(frame: .zero)
+        wantsLayer = true
+        indicator.cornerRadius = 7
+        layer?.insertSublayer(indicator, at: 0)   // 垫在按钮层之下
         var x: CGFloat = 0
         for (i, t) in titles.enumerated() {
             let b = NSButton(title: t, target: self, action: #selector(clicked(_:)))
             b.isBordered = false
             b.tag = i
-            b.wantsLayer = true
-            b.layer?.cornerRadius = 7
             let w = ceil((t as NSString).size(withAttributes:
                 [.font: NSFont.systemFont(ofSize: Typo.control, weight: .semibold)]).width) + padH * 2
             b.frame = NSRect(x: x, y: 0, width: w, height: btnH)
@@ -464,6 +559,9 @@ final class PillTabControl: NSView {
             buttons.append(b)
         }
         setFrameSize(NSSize(width: max(0, x - btnGap), height: btnH))
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        indicator.frame = buttons[0].frame
+        CATransaction.commit()
         restyle()
     }
 
@@ -478,6 +576,35 @@ final class PillTabControl: NSView {
         guard buttons.indices.contains(i) else { return }
         selectedIndex = i
         restyle()
+        moveIndicator(to: buttons[i].frame)
+    }
+
+    /// 弹簧滑动到目标标签：位置 + 宽度各一条弹簧，从 presentation value 出发——
+    /// ⌘←→ 快速连按时中途打断重定向不跳变。
+    private func moveIndicator(to target: CGRect) {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            indicator.frame = target
+            CATransaction.commit()
+            return
+        }
+        let fromPos = indicator.presentation()?.position ?? indicator.position
+        let fromBounds = indicator.presentation()?.bounds ?? indicator.bounds
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        indicator.frame = target                    // 模型值先落位
+        CATransaction.commit()
+        let pos = CASpringAnimation(keyPath: "position")
+        pos.mass = 1; pos.stiffness = Motion.springStiffness; pos.damping = Motion.springDamping
+        pos.fromValue = NSValue(point: NSPoint(x: fromPos.x, y: fromPos.y))
+        pos.toValue = NSValue(point: NSPoint(x: target.midX, y: target.midY))
+        pos.duration = pos.settlingDuration
+        indicator.add(pos, forKey: "pos")
+        let bnd = CASpringAnimation(keyPath: "bounds")
+        bnd.mass = 1; bnd.stiffness = Motion.springStiffness; bnd.damping = Motion.springDamping
+        bnd.fromValue = NSValue(rect: NSRect(origin: .zero, size: fromBounds.size))
+        bnd.toValue = NSValue(rect: NSRect(origin: .zero, size: target.size))
+        bnd.duration = bnd.settlingDuration
+        indicator.add(bnd, forKey: "bounds")
     }
 
     func applyTheme(_ t: Theme) {
@@ -486,11 +613,11 @@ final class PillTabControl: NSView {
     }
 
     private func restyle() {
+        indicator.backgroundColor = theme.accent.withAlphaComponent(0.16).cgColor
+        indicator.borderWidth = 1
+        indicator.borderColor = theme.accent.withAlphaComponent(0.45).cgColor
         for (i, b) in buttons.enumerated() {
             let on = i == selectedIndex
-            b.layer?.backgroundColor = on ? theme.accent.withAlphaComponent(0.16).cgColor : NSColor.clear.cgColor
-            b.layer?.borderWidth = on ? 1 : 0
-            b.layer?.borderColor = theme.accent.withAlphaComponent(0.45).cgColor
             // 选中/未选中都用 semibold 测宽（init 时按 semibold 算），避免切换时文字抖动
             b.attributedTitle = NSAttributedString(string: titles[i], attributes: [
                 .font: NSFont.systemFont(ofSize: Typo.control, weight: on ? .semibold : .regular),
@@ -581,6 +708,13 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private var pendingQuickPaste: Bool?
     /// 面板不可见时产生的提示（大图被丢弃、权限已授予等），下次唤起时补显示。
     private var pendingNotice: (text: String, actionTitle: String?, action: (() -> Void)?, duration: TimeInterval)?
+    /// ⌘ 角标当前是否在屏（flagsChanged 高频触发，只在翻转时重放 stagger）。
+    private var badgesShown = false
+    /// 导航意图追踪：←→/切标签/点卡 = 「我在导航」，空格 → 预览；再输入字符复位，空格回归打字。
+    /// 补上「搜索 → 核对 → 粘贴」主流程里预览不可达的洞。
+    private var navigatedSinceEdit = false
+    /// 卡片条两端的滚动边缘渐隐 mask（对应方向有溢出内容时才渐隐，硬裁 → 「还有更多」）。
+    private var edgeMask: CAGradientLayer?
     /// 数据库不可用只提醒一次（每次会话）。
     private var didWarnDBUnavailable = false
     /// 辅助功能授权轮询：打开设置后监测授权变化，主动补「已授权/需重启」提示。
@@ -606,6 +740,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         // App 失活 → 收面板（hidesOnDeactivate 的手动版，走 hide() 正规清理路径）。
         // 300ms 宽限期：唤起瞬间的激活竞态（协作激活先拒后成 / 前台 App 短暂抢回焦点）
         // 不应把刚显示的面板收掉。
+        // 显式决策：拖出（drag-out）落到目标 App 后，焦点转移触发本路径把面板收起——
+        // 这是有意保留的「用完即走」语义，不是副作用；改失活逻辑时不要破坏这条链路。
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification,
                                                object: nil, queue: .main) { [weak self] _ in
             guard let self, self.panel.isVisible else { return }
@@ -623,6 +759,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         NotificationCenter.default.addObserver(forName: Settings.themeChanged, object: nil, queue: .main) { [weak self] _ in
             self?.applyTheme()
             self?.refilterIfVisible()     // 重建卡片以套用新主题色
+        }
+        // 系统「增强对比度 / 减弱动态」等辅助功能开关变化：边框生效色与字重要即时跟随
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.applyTheme()
+            self?.refilterIfVisible()
         }
     }
 
@@ -781,6 +925,21 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         cardScroll.documentView = cardStrip
         blur.addSubview(cardScroll)
 
+        // 滚动边缘渐隐（§12 scroll edge）：26pt 渐隐段，只在对应方向确有溢出时出现
+        cardScroll.wantsLayer = true
+        let mask = CAGradientLayer()
+        mask.startPoint = CGPoint(x: 0, y: 0.5)
+        mask.endPoint = CGPoint(x: 1, y: 0.5)
+        mask.colors = [NSColor.black.cgColor, NSColor.black.cgColor,
+                       NSColor.black.cgColor, NSColor.black.cgColor]
+        cardScroll.layer?.mask = mask
+        edgeMask = mask
+        cardScroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification,
+                                               object: cardScroll.contentView, queue: .main) { [weak self] _ in
+            self?.updateEdgeMask()
+        }
+
         emptyLabel = NSTextField(labelWithString: "")
         emptyLabel.alignment = .center
         emptyLabel.font = .systemFont(ofSize: Typo.emphasis)
@@ -812,6 +971,28 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         CATransaction.commit()
         cardScroll.frame = NSRect(x: 0, y: 0, width: W, height: H - toolbarH)
         emptyLabel.frame = NSRect(x: 0, y: 0, width: W, height: H - toolbarH)
+        // 边缘渐隐 mask 跟随尺寸（26pt 渐隐段换算成比例位置）
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        edgeMask?.frame = CGRect(x: 0, y: 0, width: W, height: H - toolbarH)
+        let f = 26.0 / max(W, 1)
+        edgeMask?.locations = [0, NSNumber(value: f), NSNumber(value: 1 - f), 1]
+        CATransaction.commit()
+        updateEdgeMask()
+    }
+
+    /// 更新两端渐隐：滚到最左时左端实边（「到头了」），中段两端渐隐（「两边都还有」）。
+    private func updateEdgeMask() {
+        guard let mask = edgeMask else { return }
+        let visible = cardScroll.contentView.bounds
+        let docW = cardStrip.frame.width
+        let canLeft = visible.origin.x > 1
+        let canRight = visible.origin.x + visible.width < docW - 1
+        let solid = NSColor.black.cgColor
+        let clear = NSColor.clear.cgColor
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(0.15)   // 状态切换渐变，不闪跳
+        mask.colors = [canLeft ? clear : solid, solid, solid, canRight ? clear : solid]
+        CATransaction.commit()
     }
 
     /// hint 胶囊：右对齐在条数左缘，宽度随当前文本收缩（按住 ⌘ 展开时变宽）。
@@ -868,16 +1049,21 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         CATransaction.commit()
         topHighlight.layer?.backgroundColor = theme.topEdge.cgColor
         glowLayer.colors = [theme.glow.cgColor, NSColor.clear.cgColor]
-        divider.fillColor = theme.cardBorder
+        divider.fillColor = theme.cardBorderEffective
         magnifier.contentTintColor = theme.secondaryText
         clearButton.contentTintColor = theme.secondaryText
         searchField.textColor = theme.primaryText
         searchField.placeholderString = "搜索剪贴历史…"
         countLabel.textColor = theme.secondaryText
         hintLabel.textColor = theme.secondaryText   // 不再降 0.8：保住 ≥4.5:1 对比度
-        hintPill.layer?.borderColor = theme.cardBorder.cgColor
+        hintPill.layer?.borderColor = theme.cardBorderEffective.cgColor
         tabControl.applyTheme(theme)
         emptyLabel.textColor = theme.secondaryText
+        // vibrancy 补偿：强透明 shelf（夜青 0.42 / 轻霜 0.55）上的小字平铺 alpha 灰易被花壁纸
+        // 局部吃掉，按 Apple 材质规范升半档字重（真 vibrant label 改动大，字重是等效低成本档）
+        let vibrancyBoost: NSFont.Weight = theme.shelfTint.alphaComponent < 0.6 ? .medium : .regular
+        hintLabel.font = .systemFont(ofSize: Typo.caption, weight: vibrancyBoost)
+        countLabel.font = .systemFont(ofSize: Typo.body, weight: vibrancyBoost)
     }
 
     private func setZone(_ z: Focus) {
@@ -890,6 +1076,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     private func selectTab(pinned: Bool) {
         guard showPinnedOnly != pinned else { return }
         showPinnedOnly = pinned
+        navigatedSinceEdit = true           // 切标签 = 导航意图
         updateTabs()
         refilter()
     }
@@ -916,6 +1103,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         layoutHintPill()
         showPinnedOnly = false
         focusZone = .cards
+        navigatedSinceEdit = false
+        badgesShown = false
         updateTabs()
 
         // 先清掉上一次的卡片内容：既避免推迟构建期间残留旧数据，
@@ -988,8 +1177,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     func hide() {
         // 刻意无退场动画（与 140ms 入场不对称）：粘贴完成的瞬间用户要的是「立刻让开」，
-        // 任何退场编排都是在挡视线。
-        preview.hide()
+        // 任何退场编排都是在挡视线。预览同帧消失，不留浮层单独表演。
+        preview.hide(animated: false)
         hideToast()
         removeKeyMonitor()
         pendingQuickPaste = nil
@@ -1008,7 +1197,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             let cmdDown = event.modifierFlags.contains(.command)
             self.hintLabel.stringValue = cmdDown ? self.hintFull : self.hintShort
             self.layoutHintPill()             // 胶囊宽度跟随文本伸缩
-            self.updateIndexBadges(cmdDown)   // 前 9 张卡叠直达编号，⌘1-9 有了可视映射
+            if cmdDown != self.badgesShown {  // 只在 ⌘ 状态翻转时动角标（其他修饰键变化不重放 stagger）
+                self.badgesShown = cmdDown
+                self.updateIndexBadges(cmdDown)
+            }
             return event
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -1058,14 +1250,26 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                 if self.preview.isVisible { self.preview.scrollText(by: 44) }
                 else if self.focusZone != .cards { self.setZone(.cards) }
                 return nil
-            case 36, 76:                                        // return / enter → 一律粘贴选中项
-                // 标签区不例外：切完 tab 直接回车是最常见的连贯动作，选中卡始终可见，
-                // 「回车只切区不粘贴」会被当成粘贴失灵（进入卡片区交给 ↓）。
+            case 36, 76:                                        // return / enter
+                // ⌘⏎：触发在屏 action-toast 的按钮（打开设置/立即重启）——键盘优先的 App
+                // 不能让关键路径按钮只有鼠标可达（§16 Flexibility）
+                if cmd, self.toastAction != nil {
+                    self.toastActionFired()
+                    return nil
+                }
+                // 一律粘贴选中项。标签区不例外：切完 tab 直接回车是最常见的连贯动作，
+                // 选中卡始终可见，「回车只切区不粘贴」会被当成粘贴失灵（进入卡片区交给 ↓）。
                 if self.focusZone == .tabs { self.setZone(.cards) }   // 视觉归位（无权限时面板不关，焦点应在卡片区）
                 let plain = Settings.shared.plainTextPaste || event.modifierFlags.contains(.option)
                 self.pasteSelected(plain: plain)
                 return nil
-            case 49 where self.searchField.stringValue.isEmpty:  // 空格：Quick Look 式预览（有查询时空格归输入框）
+            case 116 where self.preview.isVisible: self.preview.scrollPage(-1); return nil          // PageUp
+            case 121 where self.preview.isVisible: self.preview.scrollPage(1); return nil           // PageDown
+            case 115 where self.preview.isVisible: self.preview.scrollToEdge(top: true); return nil  // Home
+            case 119 where self.preview.isVisible: self.preview.scrollToEdge(top: false); return nil // End
+            case 49 where self.searchField.stringValue.isEmpty || self.navigatedSinceEdit:
+                // 空格：Quick Look 式预览。框为空，或刚用方向键/标签/点卡导航过（意图=核对内容）；
+                // 继续输入字符会复位意图，空格回归打字。
                 self.togglePreview()
                 return nil
             case 53:                                            // esc：三段式，预览 → 清查询 → 关面板
@@ -1103,10 +1307,14 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         refilter()
     }
 
-    /// 按住 ⌘ 时给前 9 张可见卡叠直达编号。
+    /// 按住 ⌘ 时给前 9 张可见卡叠直达编号（入场从左到右 stagger，退场同帧）。
     private func updateIndexBadges(_ show: Bool) {
         for (i, card) in cardViews.enumerated() where i < filtered.count {
-            card.setIndexBadge(show && i < 9 ? i + 1 : nil)
+            if show && i < 9 {
+                card.showIndexBadge(i + 1, delay: Double(i) * Motion.badgeStagger)
+            } else {
+                card.hideIndexBadge()
+            }
         }
     }
 
@@ -1152,11 +1360,13 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     private func moveSelection(_ delta: Int) {
         guard !filtered.isEmpty else { return }
+        navigatedSinceEdit = true           // 方向键移选 = 导航意图
         selectIndex(max(0, min(renderedCount - 1, selectedIndex + delta)))
     }
 
     private func selectIndex(_ i: Int) {
         guard cardViews.indices.contains(i) else { return }
+        let dir = i > selectedIndex ? 1 : (i < selectedIndex ? -1 : 0)   // 预览内容的方向暗示
         if cardViews.indices.contains(selectedIndex) { cardViews[selectedIndex].setSelected(false) }
         selectedIndex = i
         focusZone = .cards                                  // 选/点卡片 → 焦点回到卡片区
@@ -1164,8 +1374,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         cardViews[i].setSelected(true, focused: true)
         let r = cardViews[i].frame.insetBy(dx: -(gap + pad), dy: 0)
         cardScroll.contentView.scrollToVisible(r)
-        if preview.isVisible, filtered.indices.contains(i) {   // 预览开着：跟随选择切换内容
-            preview.show(filtered[i], above: panel)
+        if preview.isVisible, filtered.indices.contains(i) {   // 预览开着：跟随选择切换内容（带方向滑动）
+            preview.show(filtered[i], above: panel, slide: dir)
         }
         // VoiceOver 焦点同步：键盘 first responder 始终在搜索框，VO 光标不会自己跟过来，
         // 选中变化必须主动播报，否则 VO 用户听不到「当前选到哪张」。
@@ -1318,7 +1528,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         if let actionTitle {
             toastAction = action
-            let btn = NSButton(title: actionTitle, target: self, action: #selector(toastActionFired))
+            // 按钮标题带 ⌘⏎ 提示：键盘用户的触发路径要可发现
+            let btn = NSButton(title: "\(actionTitle) ⌘⏎", target: self, action: #selector(toastActionFired))
             btn.isBordered = false
             btn.font = .systemFont(ofSize: Typo.body, weight: .semibold)
             btn.contentTintColor = theme.accent
@@ -1378,6 +1589,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     func controlTextDidChange(_ obj: Notification) {
         clearButton.isHidden = searchField.stringValue.isEmpty
+        navigatedSinceEdit = false          // 回到打字意图：空格归还给搜索框
         refilter()
     }
 
@@ -1489,6 +1701,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
         scheduleChunkedBuild(from: visibleCount, to: renderCount,
                              cardW: cardW, cardY: cardY, generation: generation)
+        updateEdgeMask()   // 条带宽度变化不经过滚动通知，重建后手动刷一次
     }
 
     /// 补足视图池到第 i 张并布置（frame + 回调），configure 为真时同时填内容。
@@ -1504,7 +1717,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
                             y: cardY, width: cardW, height: ClipCardView.cardH)
         if configure { card.configure(filtered[i], highlight: currentQuery) }
         let idx = i
-        card.onSelect = { [weak self] in self?.selectIndex(idx) }
+        card.onSelect = { [weak self] in
+            self?.navigatedSinceEdit = true   // 点卡 = 导航意图（鼠标用户随后按空格应能预览）
+            self?.selectIndex(idx)
+        }
         card.onActivate = { [weak self] in
             self?.selectIndex(idx)
             self?.pasteSelected(plain: Settings.shared.plainTextPaste)

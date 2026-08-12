@@ -32,6 +32,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        // 「随色」主题：系统强调色变化时刷新（accent 族运行时现算，不快照）。
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("AppleColorPreferencesChangedNotification"),
+            object: nil, queue: .main
+        ) { _ in
+            DispatchQueue.main.async {
+                if Settings.shared.themeID == Theme.accentFollowID {
+                    NotificationCenter.default.post(name: Settings.themeChanged, object: nil)
+                }
+            }
+        }
 
         panel.onPaste = { [weak self] item, plain in
             Settings.shared.hasCompletedFirstRun = true   // 用过一次粘贴 = 教学已完成
