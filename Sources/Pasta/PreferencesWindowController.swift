@@ -26,9 +26,10 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     /// 主题下拉按深/浅分组（7 套平铺超出「每决策点 ≤4」，分组降选择负担）；
     /// id 存 representedObject——分隔线会打乱索引，不能按下标映射。
     private let themeGroups: [[(id: String, name: String)]] = [
-        [(Theme.autoID, "跟随系统（夜青 / 晨光）")],
+        [(Theme.autoID, "跟随系统（夜青 / 轻霜）"),
+         (Theme.accentFollowID, "随色（跟随强调色）")],                             // 跟随组：外观 / 强调色
         [Theme.midnight, Theme.ink].map { ($0.id, $0.name) },                       // 深色
-        [Theme.daylight, Theme.tangerine, Theme.paper].map { ($0.id, $0.name) },    // 浅色
+        [Theme.frost, Theme.paper].map { ($0.id, $0.name) },                        // 浅色
     ]
 
     init() {
@@ -87,7 +88,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
                 item?.representedObject = id
                 // 色板预览：不唤面板也能看到主题长相；「跟随系统」用深浅拼半
                 item?.image = id == Theme.autoID
-                    ? Self.splitSwatch(dark: .midnight, light: .daylight)
+                    ? Self.splitSwatch(dark: .midnight, light: .frost)
                     : Self.swatch(for: Theme.by(id: id))
             }
         }
