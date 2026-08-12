@@ -195,7 +195,7 @@ struct Theme {
         accent: NSColor(srgbRed: 0, green: 0.627, blue: 0.431, alpha: 1),   // #00A06E 青提绿（图形 3.36:1；文字走 accentText）
         accentGlow: NSColor(srgbRed: 0, green: 0.627, blue: 0.431, alpha: 0.55),
         cardBG: NSColor(white: 1, alpha: 1),
-        cardHoverBG: NSColor(srgbRed: 0.965, green: 0.992, blue: 0.973, alpha: 1),  // #F6FDF8 泛薄荷微光
+        cardHoverBG: NSColor(srgbRed: 0.902, green: 0.957, blue: 0.922, alpha: 1),  // #E6F4EB 薄荷微光：对白卡可辨比 1.13（原 #F6FDF8 仅 1.03 不可辨，同晨光修复前问题）
         cardFG: NSColor(srgbRed: 0.133, green: 0.192, blue: 0.161, alpha: 1),
         cardDim: NSColor(srgbRed: 0.4, green: 0.455, blue: 0.42, alpha: 1),         // #66746B 4.9:1
         cardFaint: NSColor(srgbRed: 0.408, green: 0.463, blue: 0.424, alpha: 1),    // #68766C 4.7:1（设计稿 #96A198 仅装饰级，文字位压深保 AA）
@@ -229,7 +229,7 @@ struct Theme {
         accent: NSColor(srgbRed: 0.878, green: 0.412, blue: 0, alpha: 1),           // #E06900 蜜柑橙（图形 3.2:1）
         accentGlow: NSColor(srgbRed: 0.878, green: 0.412, blue: 0, alpha: 0.55),
         cardBG: NSColor(white: 1, alpha: 0.92),                                     // 近白卡面，透一丝晨光
-        cardHoverBG: NSColor(white: 1, alpha: 1),
+        cardHoverBG: NSColor(srgbRed: 0.980, green: 0.929, blue: 0.847, alpha: 1),  // #FAEDD8 蜜杏 wash：可辨比 1.12–1.14（原「半透白→实白」仅 1.01–1.03 不可辨）
         cardFG: NSColor(srgbRed: 0.165, green: 0.239, blue: 0.298, alpha: 1),
         cardDim: NSColor(srgbRed: 0.322, green: 0.38, blue: 0.42, alpha: 1),        // #52616B 6.4:1
         cardFaint: NSColor(srgbRed: 0.4, green: 0.451, blue: 0.482, alpha: 1),      // #66737B 4.88:1
@@ -269,7 +269,7 @@ struct Theme {
         accent: NSColor(srgbRed: 0.031, green: 0.498, blue: 0.627, alpha: 1),       // #087FA0 晴空天青（色相 193°，与品牌蓝 203° 拉开）
         accentGlow: NSColor(srgbRed: 0.031, green: 0.498, blue: 0.627, alpha: 0.55),
         cardBG: NSColor(srgbRed: 1.0, green: 0.996, blue: 0.969, alpha: 0.92),      // 近乳心暖白
-        cardHoverBG: NSColor(white: 1, alpha: 1),
+        cardHoverBG: NSColor(srgbRed: 0.984, green: 0.937, blue: 0.788, alpha: 1),  // #FBEFC9 晨曦金 wash：可辨比 1.11–1.13（原「半透暖白→实白」仅 1.02–1.04 不可辨）
         cardFG: NSColor(srgbRed: 0.180, green: 0.149, blue: 0.094, alpha: 1),
         cardDim: NSColor(srgbRed: 0.42, green: 0.376, blue: 0.278, alpha: 1),       // #6B6047 6.1:1
         cardFaint: NSColor(srgbRed: 0.494, green: 0.451, blue: 0.341, alpha: 1),    // #7E7357 4.64:1
@@ -278,13 +278,13 @@ struct Theme {
         cardShadow: NSColor(srgbRed: 0.478, green: 0.369, blue: 0.157, alpha: 1),   // 暖棕影（非冷灰）
         cardShadowNormal: 0.10, cardShadowHover: 0.20,
         pinColor: NSColor(srgbRed: 0.612, green: 0.42, blue: 0, alpha: 1),          // #9C6B00 蜜柿星（留下来的太阳）4.4:1
-        typeTints: [
-            "链接": TypeTint(fg: NSColor(srgbRed: 0.035, green: 0.388, blue: 0.267, alpha: 1),    // #096344 薄荷深
-                           wash: NSColor(srgbRed: 0.851, green: 0.965, blue: 0.898, alpha: 1)),   // #D9F6E5
+        typeTints: [   // 语义色跨主题稳定：蓝青族=链接、琥珀橙族=图片、绿族=邮箱（与 accent 同族不回避，午夜青先例）
+            "链接": TypeTint(fg: NSColor(srgbRed: 0.027, green: 0.420, blue: 0.525, alpha: 1),    // #076B86 天青深（卡底 5.95:1）
+                           wash: NSColor(srgbRed: 0.851, green: 0.945, blue: 0.973, alpha: 1)),   // #D9F1F8
             "图片": TypeTint(fg: NSColor(srgbRed: 0.561, green: 0.239, blue: 0.063, alpha: 1),    // #8F3D10 蜜桃深
                            wash: NSColor(srgbRed: 1.0, green: 0.894, blue: 0.827, alpha: 1)),     // #FFE4D3
-            "邮箱": TypeTint(fg: NSColor(srgbRed: 0.42, green: 0.322, blue: 0, alpha: 1),         // #6B5200 奶油深
-                           wash: NSColor(srgbRed: 1.0, green: 0.945, blue: 0.745, alpha: 1)),     // #FFF1BE
+            "邮箱": TypeTint(fg: NSColor(srgbRed: 0.035, green: 0.388, blue: 0.267, alpha: 1),    // #096344 薄荷深（卡底 7.15:1）
+                           wash: NSColor(srgbRed: 0.851, green: 0.965, blue: 0.898, alpha: 1)),   // #D9F6E5
         ],
         accentText: NSColor(srgbRed: 0.027, green: 0.420, blue: 0.525, alpha: 1),   // #076B86 天青深档：白卡 6.0:1
         gradient: [
