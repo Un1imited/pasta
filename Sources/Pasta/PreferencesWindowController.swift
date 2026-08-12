@@ -26,9 +26,9 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
     /// 主题下拉按深/浅分组（7 套平铺超出「每决策点 ≤4」，分组降选择负担）；
     /// id 存 representedObject——分隔线会打乱索引，不能按下标映射。
     private let themeGroups: [[(id: String, name: String)]] = [
-        [(Theme.autoID, "跟随系统（午夜青 / 晨光）")],
-        [Theme.midnight, Theme.glass, Theme.ink].map { ($0.id, $0.name) },          // 深色
-        [Theme.daylight, Theme.candy, Theme.tangerine, Theme.sunny].map { ($0.id, $0.name) },   // 浅色
+        [(Theme.autoID, "跟随系统（夜青 / 晨光）")],
+        [Theme.midnight, Theme.ink].map { ($0.id, $0.name) },                       // 深色
+        [Theme.daylight, Theme.tangerine, Theme.paper].map { ($0.id, $0.name) },    // 浅色
     ]
 
     init() {
@@ -360,7 +360,7 @@ final class PreferencesWindowController: NSWindowController, NSTableViewDataSour
         limitPopup.selectItem(at: lIdx)
         let currentID = Settings.shared.themeID
         let match = themePopup.itemArray.first { $0.representedObject as? String == currentID }
-            ?? themePopup.itemArray.first { $0.representedObject as? String == Theme.midnight.id }  // 找不到时退到午夜青
+            ?? themePopup.itemArray.first { $0.representedObject as? String == Theme.midnight.id }  // 找不到时退到夜青
         if let match { themePopup.select(match) }
     }
 

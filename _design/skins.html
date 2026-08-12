@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
-<title>Pasta · 皮肤总览（7 套）</title>
+<title>Pasta · 皮肤总览（5 套）</title>
 <style>
 /* ============================================================
-   Pasta 皮肤总览 · 与 Sources/Pasta/Theme.swift 同步（2026-08-10）
+   Pasta 皮肤总览 · 与 Sources/Pasta/Theme.swift 同步（2026-08-12）
    ------------------------------------------------------------
-   7 套 = 原四套（已含优化：午夜青/晨光启用 typeTints、晨光 hover
-   加深、纯墨描边 8%、晶蓝转冰青）+ 新三套（青提/蜜柑/晴日）。
+   5 套 = 夜青（默认）/ 晨光 / 纯墨 / 蜜柑 / 宣纸——收敛后的
+   正交阵容（删 晶蓝/青提/晴日，理由与被删色值见文末档案）。
    决策过程见文末档案摘要。色值即 Theme.swift 落码值。
    ============================================================ */
 :root{
@@ -70,7 +70,7 @@ section{margin-top:64px}
   background:var(--hint-bg);border-top:1px solid var(--hint-line)}
 .hintbar b{color:var(--ptext);font-weight:600}
 
-/* ============ 1 · 午夜青 midnight（默认） ============ */
+/* ============ 1 · 夜青 midnight（默认） ============ */
 .t-mid{--shelf:rgba(38,43,54,.42);--top-edge:rgba(255,255,255,.16);--glow:rgba(24,158,242,.13);
   --ptext:rgba(255,255,255,.95);--stext:rgba(255,255,255,.55);
   --accent:#189EF2;--acc-text:#189EF2;--acc-wash:rgba(24,158,242,.16);--acc-line:rgba(24,158,242,.45);--acc-ring:rgba(24,158,242,.30);
@@ -97,26 +97,7 @@ section{margin-top:64px}
   --hint-bg:rgba(0,0,0,.4);--hint-line:rgba(255,255,255,.04)}
 .t-ink .desktop{background:linear-gradient(160deg,#17130e 0%,#0c0a08 60%,#000 100%)}
 
-/* ============ 4 · 晶蓝 glass（冰青玻璃拟态） ============ */
-.t-gls{--top-edge:rgba(255,255,255,.22);--glow:rgba(88,204,224,.16);
-  --ptext:rgba(255,255,255,.95);--stext:rgba(210,224,245,.85);
-  --accent:#58CCE0;--acc-text:#58CCE0;--acc-wash:rgba(88,204,224,.16);--acc-line:rgba(88,204,224,.45);--acc-ring:rgba(88,204,224,.30);
-  --card:rgba(26,38,61,.60);--card-fg:rgba(255,255,255,.92);--card-dim:rgba(210,224,245,.80);--card-faint:rgba(210,224,245,.65);
-  --card-border:rgba(255,255,255,.14);--card-shadow:0 6px 16px rgba(0,0,0,.34);
-  --hint-bg:rgba(0,0,0,.20);--hint-line:rgba(255,255,255,.08)}
-.t-gls .desktop{background:linear-gradient(160deg,#33475c 0%,#22303f 55%,#141b24 100%)}
-.t-gls .shelf .bgfill{background:linear-gradient(90deg,rgba(20,24,31,.92) 0%,rgba(28,39,64,.92) 36%,rgba(38,72,95,.92) 62%,rgba(33,48,74,.92) 100%)}
-
-/* ============ 5 · 青提 candy ============ */
-.t-can{--shelf:rgba(255,249,236,.92);--top-edge:rgba(255,255,255,.75);--glow:rgba(0,160,110,.20);
-  --ptext:#223129;--stext:#526258;
-  --accent:#00A06E;--acc-text:#007A54;--acc-wash:rgba(0,160,110,.12);--acc-line:rgba(0,160,110,.45);--acc-ring:rgba(0,160,110,.28);
-  --card:#FFFFFF;--card-fg:#223129;--card-dim:#66746B;--card-faint:#68766C;
-  --card-border:#EDE6D4;--card-shadow:0 4px 12px rgba(87,74,40,.12);
-  --hint-bg:rgba(87,74,40,.05);--hint-line:rgba(87,74,40,.09)}
-.t-can .desktop{background:linear-gradient(160deg,#c9d8c2 0%,#dde6d2 55%,#efeadd 100%)}
-
-/* ============ 6 · 蜜柑 tangerine ============ */
+/* ============ 4 · 蜜柑 tangerine ============ */
 .t-tan{--top-edge:rgba(255,255,255,.78);--glow:rgba(255,158,64,.30);
   --ptext:#2A3D4C;--stext:#485760;
   --accent:#E06900;--acc-text:#9C4A00;--acc-wash:rgba(224,105,0,.10);--acc-line:rgba(224,105,0,.45);--acc-ring:rgba(224,105,0,.28);
@@ -126,28 +107,27 @@ section{margin-top:64px}
 .t-tan .desktop{background:linear-gradient(160deg,#d8c4b0 0%,#e6d6c2 55%,#f2e6d5 100%)}
 .t-tan .shelf .bgfill{background:linear-gradient(90deg,rgba(255,233,196,.88) 0%,rgba(255,246,214,.88) 36%,rgba(255,244,228,.88) 68%,rgba(255,228,206,.88) 100%)}
 
-/* ============ 7 · 晴日 sunny ============ */
-.t-sun{--top-edge:rgba(255,255,255,.75);--glow:rgba(255,203,88,.30);
-  --ptext:#2E2618;--stext:#61553D;
-  --accent:#087FA0;--acc-text:#076B86;--acc-wash:rgba(8,127,160,.10);--acc-line:rgba(8,127,160,.45);--acc-ring:rgba(8,127,160,.28);
-  --card:rgba(255,254,247,.92);--card-fg:#2E2618;--card-dim:#6B6047;--card-faint:#7E7357;
-  --card-border:rgba(46,38,24,.10);--card-shadow:0 4px 12px rgba(122,94,40,.10);
-  --hint-bg:rgba(122,94,40,.05);--hint-line:rgba(122,94,40,.09)}
-.t-sun .desktop{background:linear-gradient(160deg,#c2d5dd 0%,#dbe4d8 55%,#efe8d2 100%)}
-.t-sun .shelf .bgfill{background:linear-gradient(90deg,rgba(255,238,190,.90) 0%,rgba(255,248,230,.86) 32%,rgba(238,249,252,.86) 66%,rgba(226,244,250,.90) 100%)}
+/* ============ 5 · 宣纸 ricepaper（中性纸感） ============ */
+.t-xz{--shelf:rgba(246,245,240,.94);--top-edge:rgba(255,255,255,.90);--glow:rgba(193,59,46,.07);
+  --ptext:#262523;--stext:#5A5850;
+  --accent:#C13B2E;--acc-text:#A02A1F;--acc-wash:rgba(193,59,46,.08);--acc-line:rgba(193,59,46,.42);--acc-ring:rgba(193,59,46,.22);
+  --card:#FCFBF6;--card-fg:#262523;--card-dim:#5C5A52;--card-faint:#6E6B62;
+  --card-border:rgba(38,37,35,.10);--card-shadow:0 3px 10px rgba(60,55,40,.12);
+  --hint-bg:rgba(38,37,35,.04);--hint-line:rgba(38,37,35,.08)}
+.t-xz .desktop{background:linear-gradient(160deg,#b9b5aa 0%,#cfccc2 55%,#e5e2d8 100%)}
 </style></head><body>
 
 <div class="wrap">
   <div>
     <div class="doc-kicker">PASTA · SKINS OVERVIEW</div>
-    <div class="doc-title">皮肤总览 <span style="font-weight:300;color:var(--doc-dim)">· 7 套 · 与 Theme.swift 同步</span></div>
-    <p class="doc-sub">原四套（<strong>已含 2026-08 优化</strong>：午夜青/晨光启用类型分色、晨光 hover 加深、纯墨描边 8%、晶蓝转冰青）
-    + 新三套明媚系（青提/蜜柑/晴日）。通用机制：<strong>typeTints</strong>（链接/图片/邮箱类型词分色，wash 淡底 + AA 字色）、
+    <div class="doc-title">皮肤总览 <span style="font-weight:300;color:var(--doc-dim)">· 5 套 · 与 Theme.swift 同步</span></div>
+    <p class="doc-sub">2026-08-12 收敛后的五套正交阵容：底色（深蓝灰/纯黑/冷白/奶油渐变/纸白）、accent（蓝/金/蓝/橙/朱）、
+    结构互不重复，任意两套眯眼可辨。通用机制：<strong>typeTints</strong>（链接/图片/邮箱类型词分色，wash 淡底 + AA 字色）、
     <strong>accentText</strong>(亮 accent 的文字级深档）。所有色值即落码值；对比度实算注释在 Theme.swift。</p>
   </div>
 
   <section class="t-mid">
-    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">午夜青</h2><span class="sec-id">midnight · 默认 · 深</span><span class="sec-note">品牌蓝本色 · 类型三色分流</span></div>
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec-title">夜青</h2><span class="sec-id">midnight · 默认 · 深</span><span class="sec-note">品牌蓝本色 · 类型三色分流</span></div>
     <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="mid"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
     <div class="chips">
       <div class="chip"><span class="sw" style="background:#262B36"></span><span class="nm">面板</span><span class="hx">#262B36 @.42</span></div>
@@ -182,30 +162,8 @@ section{margin-top:64px}
     </div>
   </section>
 
-  <section class="t-gls">
-    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">晶蓝</h2><span class="sec-id">glass · 深 · 渐变玻璃</span><span class="sec-note">冰青 accent（191°，与午夜青拉开）</span></div>
-    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
-    <div class="chips">
-      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#14181f,#1c2740,#26485F,#21304a)"></span><span class="nm">面板渐变</span><span class="hx">#14181F→#26485F→#21304A @.92</span></div>
-      <div class="chip"><span class="sw" style="background:rgba(26,38,61,.85)"></span><span class="nm">玻璃卡</span><span class="hx">#1A263D @.60</span></div>
-      <div class="chip"><span class="sw" style="background:#58CCE0"></span><span class="nm">accent · 冰青</span><span class="hx">#58CCE0</span></div>
-    </div>
-  </section>
-
-  <section class="t-can">
-    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">青提</h2><span class="sec-id">candy · 浅 · 新增</span><span class="sec-note">Duolingo 糖果流派 · 糖果胶囊分色</span></div>
-    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="can"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
-    <div class="chips">
-      <div class="chip"><span class="sw" style="background:#FFF9EC"></span><span class="nm">奶油面板</span><span class="hx">#FFF9EC @.92</span></div>
-      <div class="chip"><span class="sw" style="background:#00A06E"></span><span class="nm">accent · 青提绿</span><span class="hx">#00A06E · 文字档 #007A54</span></div>
-      <div class="chip"><span class="sw" style="background:#0E6E96"></span><span class="nm">链接 · 苏打天青</span><span class="hx">#0E6E96/#DFF3FB</span></div>
-      <div class="chip"><span class="sw" style="background:#7A5A00"></span><span class="nm">图片 · 柠檬</span><span class="hx">#7A5A00/#FFF1BF</span></div>
-      <div class="chip"><span class="sw" style="background:#0A7247"></span><span class="nm">邮箱 · 薄荷</span><span class="hx">#0A7247/#DCF5E9</span></div>
-    </div>
-  </section>
-
   <section class="t-tan">
-    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">蜜柑</h2><span class="sec-id">tangerine · 浅 · 新增</span><span class="sec-note">Headspace 迁移 · 橙管情绪墨青管信息</span></div>
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec-title">蜜柑</h2><span class="sec-id">tangerine · 浅 · 新增</span><span class="sec-note">Headspace 迁移 · 橙管情绪墨青管信息</span></div>
     <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="tan"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
     <div class="chips">
       <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#FFE9C4,#FFF6D6,#FFF4E4,#FFE4CE)"></span><span class="nm">晨光渐变</span><span class="hx">蜜杏→柠檬奶油→蜜桃雾 @.88</span></div>
@@ -217,21 +175,23 @@ section{margin-top:64px}
     </div>
   </section>
 
-  <section class="t-sun">
-    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec-title">晴日</h2><span class="sec-id">sunny · 浅 · 新增</span><span class="sec-note">Susan Kare 谱系 · 糖纸三色贴纸</span></div>
-    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="sun"></div><div class="hintbar"><span><b>↩</b> 粘贴 · <b>⌥↩</b> 纯文本 · <b>⌘P</b> 常用 · 按住 <b>⌘</b> 更多</span></div></div></div>
+  <section class="t-xz">
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec-title">宣纸</h2><span class="sec-id">ricepaper · 浅 · 新增</span><span class="sec-note">书房宣纸 + 一枚印章 · 中性纸感</span></div>
+    <p class="rationale">第三种浅色：不是奶油的暖也不是雪的冷，是 <em>chroma≈0 的纸白</em>。墨字、铅笔灰元信息，
+    唯一的颜色是印泥朱 accent；类型分色走低饱和印刷感（印刷蓝/赭石/竹绿）。第三轮四方向探索（skins-explore-v3.html）中被采纳的一支。</p>
+    <div class="stage"><div class="desktop"></div><div class="shelf"><div class="bgfill"></div><div class="glowfill"></div><div class="toolbar"><div class="search"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 L14 14"/></svg><span>搜索剪贴历史…</span></div><div class="tabs"><span class="tab on">剪贴板</span><span class="tab">常用</span></div><span class="count">42 条</span></div><div class="cards" data-shelf data-tints="xz"></div><div class="hintbar"><span><b>↩</b> 粘贴 · 按住 <b>⌘</b> 全部快捷键</span></div></div></div>
     <div class="chips">
-      <div class="chip"><span class="sw" style="background:linear-gradient(90deg,#FFEEBE,#FFF8E6,#EEF9FC,#E2F4FA)"></span><span class="nm">晨曦→天青渐变</span><span class="hx">#FFEEBE→#E2F4FA</span></div>
-      <div class="chip"><span class="sw" style="background:#087FA0"></span><span class="nm">accent · 晴空天青</span><span class="hx">#087FA0 · 文字档 #076B86</span></div>
-      <div class="chip"><span class="sw" style="background:#2E2618"></span><span class="nm">墨仁棕正文</span><span class="hx">#2E2618</span></div>
-      <div class="chip"><span class="sw" style="background:#076B86"></span><span class="nm">链接 · 天青</span><span class="hx">#076B86/#D9F1F8</span></div>
-      <div class="chip"><span class="sw" style="background:#8F3D10"></span><span class="nm">图片 · 蜜桃</span><span class="hx">#8F3D10/#FFE4D3</span></div>
-      <div class="chip"><span class="sw" style="background:#096344"></span><span class="nm">邮箱 · 薄荷</span><span class="hx">#096344/#D9F6E5</span></div>
+      <div class="chip"><span class="sw" style="background:#F6F5F0"></span><span class="nm">宣纸白</span><span class="hx">#F6F5F0 @.94（chroma≈0）</span></div>
+      <div class="chip"><span class="sw" style="background:#C13B2E"></span><span class="nm">accent · 印泥朱</span><span class="hx">#C13B2E · 文字档 #A02A1F</span></div>
+      <div class="chip"><span class="sw" style="background:#F0EEE5"></span><span class="nm">hover · 纸面压深</span><span class="hx">#F0EEE5 · 可辨比 1.12</span></div>
+      <div class="chip"><span class="sw" style="background:#1F5FA0"></span><span class="nm">链接 · 印刷蓝</span><span class="hx">#1F5FA0/#E7EEF8</span></div>
+      <div class="chip"><span class="sw" style="background:#8A5A28"></span><span class="nm">图片 · 赭石</span><span class="hx">#8A5A28/#F6EBDD</span></div>
+      <div class="chip"><span class="sw" style="background:#3A7048"></span><span class="nm">邮箱 · 竹绿</span><span class="hx">#3A7048/#E5F1E6</span></div>
     </div>
   </section>
 
   <section>
-    <div class="sec-head"><span class="sec-num">08</span><h2 class="sec-title">决策档案摘要</h2></div>
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec-title">决策档案摘要</h2></div>
     <p class="rationale">2026-08-10 皮肤评审 + 两轮三方向探索：第一轮（油印紫/玫瑰石墨/特殊色）被否——「都不太行，有没有明媚一点或者活泼一点的色系」；
     第二轮明媚系三版获全数采纳——「都还不错，都做进来吧」；老四套优化对照稿获批——「可以直接落地」。
     落码新增机制：<em>typeTints</em>（类型词分色，空=旧行为）、<em>accentText</em>（亮 accent 文字级深档，nil=旧行为）。
@@ -240,6 +200,11 @@ section{margin-top:64px}
     分别加深至薄荷 #E6F4EB / 蜜杏 #FAEDD8 / 晨曦金 #FBEFC9（可辨比 1.11–1.14）；
     晴日类型色语义归位（链接=天青 #076B86、邮箱=薄荷 #096344，全家族「蓝青=链接、琥珀=图片、绿=邮箱」对齐）；
     偏好主题下拉按深/浅分组。</p>
+    <p class="rationale">2026-08-12 第三轮探索（skins-explore-v3.html）：四个空白象限各出一方向——雪莓（冷浅）/ 夜柠（暗活泼）/
+    碧潭（浓底纸卡）/ 宣纸（中性纸感），<em>宣纸被采纳落码</em>（文字对实算 5.1–14.8:1、hover 可辨比 1.12）。其余三方向存档备选。</p>
+    <p class="rationale">2026-08-12 收敛（8 → 5）：重复度评估后<em>删除 晶蓝/青提/晴日</em>——三套明媚系 shelfTint 几乎同值（#FFF9EC/#FFF7E8/#FFF8E6），
+    晴日 accent 还与晶蓝（191°）/晨光（203°）挤同一色相带；晶蓝与夜青（时名「午夜青」）同属深蓝家族。留下的五套在底色/accent/结构上完全正交。
+    被删三套色值存于 git 历史与本档案，被删 id 由 Theme.by(id:) 回退到夜青。</p>
   </section>
 </div>
 
@@ -250,9 +215,8 @@ const APPS={chrome:"conic-gradient(from 0deg,#ea4335,#fbbc05,#34a853,#4285f4,#ea
 const TINTS={
   mid:{"链接":["#6FBFF5","rgba(111,191,245,.14)"],"图片":["#E8B45C","rgba(232,180,92,.14)"],"邮箱":["#6FD3A8","rgba(111,211,168,.14)"]},
   day:{"链接":["#1274B2","#E3F0FB"],"图片":["#8A6400","#FFF1C9"],"邮箱":["#147A5C","#DFF4EC"]},
-  can:{"链接":["#0E6E96","#DFF3FB"],"图片":["#7A5A00","#FFF1BF"],"邮箱":["#0A7247","#DCF5E9"]},
   tan:{"链接":["#0C6E6E","#D9F3EF"],"图片":["#8A5716","#FFEBCF"],"邮箱":["#20713C","#DFF5DF"]},
-  sun:{"链接":["#076B86","#D9F1F8"],"图片":["#8F3D10","#FFE4D3"],"邮箱":["#096344","#D9F6E5"]}
+  xz:{"链接":["#1F5FA0","#E7EEF8"],"图片":["#8A5A28","#F6EBDD"],"邮箱":["#3A7048","#E5F1E6"]}
 };
 const CARDS=[
   {type:"链接",time:"刚刚",app:"chrome",src:"Chrome",n:"27 字符",body:"github.com/Un1imited/pasta",cls:"link",sel:true},
