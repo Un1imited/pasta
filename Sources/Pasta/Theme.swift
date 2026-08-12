@@ -48,22 +48,24 @@ struct Theme {
     var gradient: [NSColor]? = nil
     var gradientLocations: [NSNumber]? = nil
 
-    /// accent 底上的文字色（⌘ 直达角标等）。深色近黑默认适配 midnight/glass/ink 的亮 accent
-    /// （白字在这三个 accent 上仅 1.6–2.9:1）；daylight 的深蓝 accent 显式改用白（5.0:1）。
+    /// accent 底上的文字色（⌘ 直达角标等）。深色近黑默认适配 midnight/ink 的亮 accent
+    /// （白字在这些 accent 上仅 1.6–2.9:1）；daylight/paper 的深 accent 显式改用白。
     var onAccent: NSColor = NSColor(srgbRed: 0.04, green: 0.10, blue: 0.16, alpha: 1)
 
     // MARK: - 品牌原色（单一事实源）
-    /// Pasta 蓝 #189EF2。午夜青/晨光的 accent 从它按明度派生（色相 203° 不变）；晶蓝已转冰青 191°；
+    /// Pasta 蓝 #189EF2。夜青/晨光的 accent 从它按明度派生（色相 203° 不变）；
     /// _design/icon-v2.html 的强调色与此同源。
     static let brandBlue = NSColor(srgbRed: 0.094, green: 0.62, blue: 0.95, alpha: 1)
 
     // MARK: - 当前主题（卡片视图取色用）
     static var current: Theme = .midnight
 
-    static let all: [Theme] = [.midnight, .glass, .daylight, .ink, .candy, .tangerine, .sunny]
+    // 2026-08-12 收敛：8 → 5（删 晶蓝/青提/晴日——三套明媚系底色同质 + 晴日 accent 撞晶蓝/晨光色相带；
+    // 存档在 _design/skins-explore-v3.html 与 git 历史）。被删 id 由 by(id:) 回退到夜青。
+    static let all: [Theme] = [.midnight, .daylight, .ink, .tangerine, .paper]
     static func by(id: String) -> Theme { all.first { $0.id == id } ?? .midnight }
 
-    /// 「跟随系统」伪主题 id：深色 → 午夜青，浅色 → 晨光。
+    /// 「跟随系统」伪主题 id：深色 → 夜青，浅色 → 晨光。
     static let autoID = "auto"
 
     static func resolved(id: String) -> Theme {
@@ -72,9 +74,9 @@ struct Theme {
         return dark ? .midnight : .daylight
     }
 
-    // MARK: - 1 · 午夜青（默认）
+    // MARK: - 1 · 夜青（默认；2026-08-12 由「午夜青」更名，对齐两字命名族）
     static let midnight = Theme(
-        id: "midnight", name: "午夜青",
+        id: "midnight", name: "夜青",
         blurMaterial: .hudWindow, appearance: .darkAqua,
         shelfTint: NSColor(srgbRed: 0.149, green: 0.169, blue: 0.212, alpha: 0.42),
         topEdge: NSColor(white: 1, alpha: 0.16),
@@ -152,71 +154,8 @@ struct Theme {
         cardShadow: .black, cardShadowNormal: 0.55, cardShadowHover: 0.62,
         pinColor: NSColor(srgbRed: 0.91, green: 0.788, blue: 0.478, alpha: 1))   // 与 OLED 金 accent 同源，收敛于纯墨的克制气质
 
-    // MARK: - 4 · 晶蓝（玻璃拟态）— 深蓝横向渐变底 + 深色半透玻璃卡
-    // 对比度按最不利假设验证：behind-window 磨砂后景为纯白（亮色壁纸）、卡片位于渐变最亮段。
-    // 卡底刻意用深色半透而非浅色微透——浅卡在亮壁纸下合成变亮，任何文字对比度声称都会失效。
-    static let glass = Theme(
-        id: "glass", name: "晶蓝",
-        blurMaterial: .hudWindow, appearance: .darkAqua,
-        shelfTint: NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.92),  // 渐变缺省时的兜底
-        topEdge: NSColor(white: 1, alpha: 0.22),
-        glow: NSColor(srgbRed: 0.345, green: 0.800, blue: 0.878, alpha: 0.16),
-        primaryText: NSColor(white: 1, alpha: 0.95),
-        secondaryText: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.85),  // 白后景+最亮段实算 4.8:1（AA）
-        accent: NSColor(srgbRed: 0.345, green: 0.800, blue: 0.878, alpha: 1),   // #58CCE0 冰青（203°→191°，与午夜青拉开）：深卡底上 6.2:1
-        accentGlow: NSColor(srgbRed: 0.345, green: 0.800, blue: 0.878, alpha: 0.55),
-        cardBG: NSColor(srgbRed: 0.10, green: 0.15, blue: 0.24, alpha: 0.60),        // 深色半透，玻璃感来自透底渐变
-        cardHoverBG: NSColor(srgbRed: 0.14, green: 0.20, blue: 0.31, alpha: 0.68),
-        cardFG: NSColor(white: 1, alpha: 0.92),
-        cardDim: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.80),     // 白后景实算 6.3:1
-        cardFaint: NSColor(srgbRed: 0.824, green: 0.878, blue: 0.961, alpha: 0.65),   // 白后景实算 4.7:1
-        cardBorder: NSColor(white: 1, alpha: 0.14),
-        cardInsetHi: NSColor(white: 1, alpha: 0.24),
-        cardShadow: .black, cardShadowNormal: 0.34, cardShadowHover: 0.46,
-        gradient: [
-            NSColor(srgbRed: 0.078, green: 0.094, blue: 0.122, alpha: 0.92),  // #14181f 左暗
-            NSColor(srgbRed: 0.110, green: 0.153, blue: 0.251, alpha: 0.92),  // #1c2740
-            NSColor(srgbRed: 0.149, green: 0.282, blue: 0.373, alpha: 0.92),  // #26485F 中右最亮（向 teal 微转，随冰青 accent）
-            NSColor(srgbRed: 0.129, green: 0.188, blue: 0.290, alpha: 0.92),  // #21304a 右
-        ],
-        gradientLocations: [0.0, 0.36, 0.62, 1.0])
-
-    // MARK: - 5 · 青提（糖果浅色）— 奶油磨砂底 + 青提绿 accent + 糖果胶囊类型分色
-    // 设计稿：_design/skins.html §05（Duolingo 糖果流派）。
-    // 正文永远墨绿深灰，彩色只落功能位；类型词走糖果三色 typeTints。
-    static let candy = Theme(
-        id: "candy", name: "青提",
-        blurMaterial: .popover, appearance: .aqua,
-        shelfTint: NSColor(srgbRed: 1.0, green: 0.976, blue: 0.925, alpha: 0.92),   // 奶油暖白 #FFF9EC
-        topEdge: NSColor(white: 1, alpha: 0.75),
-        glow: NSColor(srgbRed: 0, green: 0.627, blue: 0.431, alpha: 0.20),
-        primaryText: NSColor(srgbRed: 0.133, green: 0.192, blue: 0.161, alpha: 1),  // #223129 墨绿深灰
-        secondaryText: NSColor(srgbRed: 0.322, green: 0.384, blue: 0.345, alpha: 1),   // #526258：奶油底 ≥4.5:1
-        accent: NSColor(srgbRed: 0, green: 0.627, blue: 0.431, alpha: 1),   // #00A06E 青提绿（图形 3.36:1；文字走 accentText）
-        accentGlow: NSColor(srgbRed: 0, green: 0.627, blue: 0.431, alpha: 0.55),
-        cardBG: NSColor(white: 1, alpha: 1),
-        cardHoverBG: NSColor(srgbRed: 0.902, green: 0.957, blue: 0.922, alpha: 1),  // #E6F4EB 薄荷微光：对白卡可辨比 1.13（原 #F6FDF8 仅 1.03 不可辨，同晨光修复前问题）
-        cardFG: NSColor(srgbRed: 0.133, green: 0.192, blue: 0.161, alpha: 1),
-        cardDim: NSColor(srgbRed: 0.4, green: 0.455, blue: 0.42, alpha: 1),         // #66746B 4.9:1
-        cardFaint: NSColor(srgbRed: 0.408, green: 0.463, blue: 0.424, alpha: 1),    // #68766C 4.7:1（设计稿 #96A198 仅装饰级，文字位压深保 AA）
-        cardBorder: NSColor(srgbRed: 0.929, green: 0.902, blue: 0.831, alpha: 1),   // #EDE6D4 奶油描边
-        cardInsetHi: NSColor(white: 1, alpha: 0.90),
-        cardShadow: NSColor(srgbRed: 0.34, green: 0.29, blue: 0.16, alpha: 1),      // 暖褐（软糖的暖影）
-        cardShadowNormal: 0.12, cardShadowHover: 0.20,
-        pinColor: NSColor(srgbRed: 0.561, green: 0.459, blue: 0, alpha: 1),         // #8F7500 柠檬压暗：白卡 4.5:1
-        typeTints: [
-            "链接": TypeTint(fg: NSColor(srgbRed: 0.055, green: 0.431, blue: 0.588, alpha: 1),    // #0E6E96 苏打天青
-                           wash: NSColor(srgbRed: 0.875, green: 0.953, blue: 0.984, alpha: 1)),   // #DFF3FB
-            "图片": TypeTint(fg: NSColor(srgbRed: 0.478, green: 0.353, blue: 0, alpha: 1),        // #7A5A00 柠檬深
-                           wash: NSColor(srgbRed: 1.0, green: 0.945, blue: 0.749, alpha: 1)),     // #FFF1BF
-            "邮箱": TypeTint(fg: NSColor(srgbRed: 0.039, green: 0.447, blue: 0.278, alpha: 1),    // #0A7247 薄荷深
-                           wash: NSColor(srgbRed: 0.863, green: 0.961, blue: 0.914, alpha: 1)),   // #DCF5E9
-        ],
-        accentText: NSColor(srgbRed: 0, green: 0.478, blue: 0.329, alpha: 1),       // #007A54 深青提：白卡 4.6:1
-        onAccent: NSColor(srgbRed: 0.012, green: 0.161, blue: 0.114, alpha: 1))     // #03291D 深林墨绿 4.67:1
-
-    // MARK: - 6 · 蜜柑（暖阳浅色）— 蜜杏→柠檬奶油晨光渐变 + 蜜柑橙 accent + 墨青正文
-    // 设计稿：_design/skins.html §06（Headspace 策略迁移：橙管情绪、墨青管信息）。
+    // MARK: - 4 · 蜜柑（暖阳浅色）— 蜜杏→柠檬奶油晨光渐变 + 蜜柑橙 accent + 墨青正文
+    // 设计稿：_design/skins.html §04（Headspace 策略迁移：橙管情绪、墨青管信息）。
     // 蜜柑橙只做图形（3.2:1）；一切文字场合走 accentText 烤橙 / 墨青。
     static let tangerine = Theme(
         id: "tangerine", name: "蜜柑",
@@ -256,45 +195,40 @@ struct Theme {
         gradientLocations: [0.0, 0.36, 0.68, 1.0],
         onAccent: NSColor(srgbRed: 0.165, green: 0.102, blue: 0.02, alpha: 1))      // #2A1A05 暗可可 4.96:1（亮橙上白字仅 3.2）
 
-    // MARK: - 7 · 晴日（糖纸浅色）— 晨曦金→天青气渐变 + 晴空天青 accent + 糖纸三色贴纸
-    // 设计稿：_design/skins.html §07（Susan Kare 谱系：彩色只做识别，纪律来自墨色正文）。
-    static let sunny = Theme(
-        id: "sunny", name: "晴日",
+    // MARK: - 5 · 宣纸（中性纸感浅色）— chroma≈0 纸白 + 印泥朱 accent + 低饱和印刷分色
+    // 设计稿：_design/skins-explore-v3.html §04（第三轮四方向探索中被采纳的一支）。
+    // 第三种浅色：非奶油的暖、非雪的冷，是纸。墨字 + 铅笔灰元信息，唯一的颜色是一枚印章。
+    // 全部实算：黑/白双后景，文字对 5.1–14.8:1，hover 可辨比 1.12（faint 在 hover 上仍 4.58）。
+    static let paper = Theme(
+        id: "ricepaper", name: "宣纸",
         blurMaterial: .popover, appearance: .aqua,
-        shelfTint: NSColor(srgbRed: 1.0, green: 0.973, blue: 0.902, alpha: 0.86),   // 奶油晨光 #FFF8E6（gradient 缺省兜底）
-        topEdge: NSColor(white: 1, alpha: 0.75),
-        glow: NSColor(srgbRed: 1.0, green: 0.796, blue: 0.345, alpha: 0.30),        // 晨曦金
-        primaryText: NSColor(srgbRed: 0.180, green: 0.149, blue: 0.094, alpha: 1),  // #2E2618 墨仁棕
-        secondaryText: NSColor(srgbRed: 0.380, green: 0.333, blue: 0.239, alpha: 1),   // #61553D 4.99:1
-        accent: NSColor(srgbRed: 0.031, green: 0.498, blue: 0.627, alpha: 1),       // #087FA0 晴空天青（色相 193°，与品牌蓝 203° 拉开）
-        accentGlow: NSColor(srgbRed: 0.031, green: 0.498, blue: 0.627, alpha: 0.55),
-        cardBG: NSColor(srgbRed: 1.0, green: 0.996, blue: 0.969, alpha: 0.92),      // 近乳心暖白
-        cardHoverBG: NSColor(srgbRed: 0.984, green: 0.937, blue: 0.788, alpha: 1),  // #FBEFC9 晨曦金 wash：可辨比 1.11–1.13（原「半透暖白→实白」仅 1.02–1.04 不可辨）
-        cardFG: NSColor(srgbRed: 0.180, green: 0.149, blue: 0.094, alpha: 1),
-        cardDim: NSColor(srgbRed: 0.42, green: 0.376, blue: 0.278, alpha: 1),       // #6B6047 6.1:1
-        cardFaint: NSColor(srgbRed: 0.494, green: 0.451, blue: 0.341, alpha: 1),    // #7E7357 4.64:1
-        cardBorder: NSColor(srgbRed: 0.180, green: 0.149, blue: 0.094, alpha: 0.10),   // 墨色 10%，糖纸的铅笔轮廓
+        shelfTint: NSColor(srgbRed: 0.965, green: 0.961, blue: 0.941, alpha: 0.94),  // #F6F5F0 宣纸白（黑后景 sec 5.7:1）
+        topEdge: NSColor(white: 1, alpha: 0.90),
+        glow: NSColor(srgbRed: 0.757, green: 0.231, blue: 0.180, alpha: 0.07),       // 一点朱气
+        primaryText: NSColor(srgbRed: 0.149, green: 0.145, blue: 0.137, alpha: 1),   // #262523 墨
+        secondaryText: NSColor(srgbRed: 0.353, green: 0.345, blue: 0.314, alpha: 1), // #5A5850 铅笔灰 5.7:1
+        accent: NSColor(srgbRed: 0.757, green: 0.231, blue: 0.180, alpha: 1),        // #C13B2E 印泥朱（纸卡上 5.15:1）
+        accentGlow: NSColor(srgbRed: 0.757, green: 0.231, blue: 0.180, alpha: 0.55),
+        cardBG: NSColor(srgbRed: 0.988, green: 0.984, blue: 0.965, alpha: 1),        // #FCFBF6 纸面（不透明：纸是哑光的）
+        cardHoverBG: NSColor(srgbRed: 0.941, green: 0.933, blue: 0.898, alpha: 1),   // #F0EEE5 纸面压深：可辨比 1.12
+        cardFG: NSColor(srgbRed: 0.149, green: 0.145, blue: 0.137, alpha: 1),        // 14.8:1
+        cardDim: NSColor(srgbRed: 0.361, green: 0.353, blue: 0.322, alpha: 1),       // #5C5A52 6.7:1
+        cardFaint: NSColor(srgbRed: 0.431, green: 0.420, blue: 0.384, alpha: 1),     // #6E6B62 5.1:1
+        cardBorder: NSColor(srgbRed: 0.149, green: 0.145, blue: 0.137, alpha: 0.10), // 墨 10%，铅笔轮廓
         cardInsetHi: NSColor(white: 1, alpha: 0.90),
-        cardShadow: NSColor(srgbRed: 0.478, green: 0.369, blue: 0.157, alpha: 1),   // 暖棕影（非冷灰）
-        cardShadowNormal: 0.10, cardShadowHover: 0.20,
-        pinColor: NSColor(srgbRed: 0.612, green: 0.42, blue: 0, alpha: 1),          // #9C6B00 蜜柿星（留下来的太阳）4.4:1
-        typeTints: [   // 语义色跨主题稳定：蓝青族=链接、琥珀橙族=图片、绿族=邮箱（与 accent 同族不回避，午夜青先例）
-            "链接": TypeTint(fg: NSColor(srgbRed: 0.027, green: 0.420, blue: 0.525, alpha: 1),    // #076B86 天青深（卡底 5.95:1）
-                           wash: NSColor(srgbRed: 0.851, green: 0.945, blue: 0.973, alpha: 1)),   // #D9F1F8
-            "图片": TypeTint(fg: NSColor(srgbRed: 0.561, green: 0.239, blue: 0.063, alpha: 1),    // #8F3D10 蜜桃深
-                           wash: NSColor(srgbRed: 1.0, green: 0.894, blue: 0.827, alpha: 1)),     // #FFE4D3
-            "邮箱": TypeTint(fg: NSColor(srgbRed: 0.035, green: 0.388, blue: 0.267, alpha: 1),    // #096344 薄荷深（卡底 7.15:1）
-                           wash: NSColor(srgbRed: 0.851, green: 0.965, blue: 0.898, alpha: 1)),   // #D9F6E5
+        cardShadow: NSColor(srgbRed: 0.235, green: 0.216, blue: 0.157, alpha: 1),    // 淡墨影
+        cardShadowNormal: 0.12, cardShadowHover: 0.20,
+        pinColor: NSColor(srgbRed: 0.561, green: 0.459, blue: 0, alpha: 1),          // #8F7500 赭金 4.3:1（图形级）
+        typeTints: [   // 低饱和印刷感：印刷蓝/赭石/竹绿（6.3/5.7/5.7:1）
+            "链接": TypeTint(fg: NSColor(srgbRed: 0.122, green: 0.373, blue: 0.627, alpha: 1),   // #1F5FA0 印刷蓝
+                           wash: NSColor(srgbRed: 0.906, green: 0.933, blue: 0.973, alpha: 1)),  // #E7EEF8
+            "图片": TypeTint(fg: NSColor(srgbRed: 0.541, green: 0.353, blue: 0.157, alpha: 1),   // #8A5A28 赭石
+                           wash: NSColor(srgbRed: 0.965, green: 0.922, blue: 0.867, alpha: 1)),  // #F6EBDD
+            "邮箱": TypeTint(fg: NSColor(srgbRed: 0.227, green: 0.439, blue: 0.282, alpha: 1),   // #3A7048 竹绿
+                           wash: NSColor(srgbRed: 0.898, green: 0.945, blue: 0.902, alpha: 1)),  // #E5F1E6
         ],
-        accentText: NSColor(srgbRed: 0.027, green: 0.420, blue: 0.525, alpha: 1),   // #076B86 天青深档：白卡 6.0:1
-        gradient: [
-            NSColor(srgbRed: 1.0, green: 0.933, blue: 0.745, alpha: 0.90),  // #FFEEBE 晨曦金
-            NSColor(srgbRed: 1.0, green: 0.973, blue: 0.902, alpha: 0.86),  // #FFF8E6 奶油
-            NSColor(srgbRed: 0.933, green: 0.976, blue: 0.988, alpha: 0.86),  // #EEF9FC 天青气
-            NSColor(srgbRed: 0.886, green: 0.957, blue: 0.980, alpha: 0.90),  // #E2F4FA 晴空边
-        ],
-        gradientLocations: [0.0, 0.32, 0.66, 1.0],
-        onAccent: .white)   // #087FA0 上白字 4.61:1
+        accentText: NSColor(srgbRed: 0.627, green: 0.165, blue: 0.122, alpha: 1),    // #A02A1F 印泥深档 7.1:1
+        onAccent: .white)   // #C13B2E 上白字 5.3:1
 }
 
 // MARK: - 字阶（6 档，步进 ≈1.125；UI 文字一律从这里取号）
