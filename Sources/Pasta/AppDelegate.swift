@@ -117,35 +117,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 菜单栏
 
-    /// 自绘的菜单栏单色模板图标：「层叠卡片」——剪贴历史 = 不止一张卡。
-    /// 后卡右上露出一角（上一条记录），前卡 = 面板卡片（圆角卡 + 一长一短内容行）。
-    /// 纯面性无描边（1x 不糊化），关键几何落在 0.25pt 网格。设计稿见 _design/menubar-icon-v1.png。
+    /// 自绘的菜单栏单色模板图标 v2「单卡减法」：同样的「剪贴历史 = 不止一张卡」隐喻，
+    /// 但前卡放大做主角、后卡只留一道更细的露角（呼吸缝 1.2pt）、内容行加粗到 1.6pt——
+    /// 18pt 下更整（apple-design 第二轮图标评审选定，见 _design/menubar-icon-v2.png）。
+    /// 纯面性无描边（1x 不糊化），关键几何落在 0.25pt 网格附近。
     private static func makeMenuBarIcon() -> NSImage {
         let img = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             NSColor.black.setFill()
 
-            // 后卡：右上方露出一角
-            NSBezierPath(roundedRect: NSRect(x: 6.5, y: 2.0, width: 9.0, height: 11.5),
-                         xRadius: 2.25, yRadius: 2.25).fill()
+            // 后卡：右上方露出更细的一角
+            NSBezierPath(roundedRect: NSRect(x: 7.2, y: 1.6, width: 8.6, height: 11.0),
+                         xRadius: 2.2, yRadius: 2.2).fill()
 
-            // 前卡外扩 1.1pt 的呼吸缝：把后卡被压住的部分挖掉
+            // 前卡外扩 1.2pt 的呼吸缝：把后卡被压住的部分挖掉
             ctx.setBlendMode(.destinationOut)
-            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.5, width: 9.5, height: 11.5).insetBy(dx: -1.1, dy: -1.1),
-                         xRadius: 3.35, yRadius: 3.35).fill()
+            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.3, width: 10.7, height: 11.9).insetBy(dx: -1.2, dy: -1.2),
+                         xRadius: 3.7, yRadius: 3.7).fill()
             ctx.setBlendMode(.normal)
 
-            // 前卡：主体
+            // 前卡：主体（比 v1 大 1.2pt，主角感）
             NSColor.black.setFill()
-            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.5, width: 9.5, height: 11.5),
-                         xRadius: 2.25, yRadius: 2.25).fill()
+            NSBezierPath(roundedRect: NSRect(x: 2.5, y: 4.3, width: 10.7, height: 11.9),
+                         xRadius: 2.5, yRadius: 2.5).fill()
 
-            // 前卡内容行：一长一短，镂空
+            // 前卡内容行：一长一短，镂空（1.6pt，比 v1 粗一档）
             ctx.setBlendMode(.destinationOut)
-            NSBezierPath(roundedRect: NSRect(x: 4.75, y: 8.0, width: 5.0, height: 1.5),
-                         xRadius: 0.75, yRadius: 0.75).fill()
-            NSBezierPath(roundedRect: NSRect(x: 4.75, y: 11.0, width: 3.5, height: 1.5),
-                         xRadius: 0.75, yRadius: 0.75).fill()
+            NSBezierPath(roundedRect: NSRect(x: 4.9, y: 8.1, width: 6.2, height: 1.6),
+                         xRadius: 0.8, yRadius: 0.8).fill()
+            NSBezierPath(roundedRect: NSRect(x: 4.9, y: 11.3, width: 4.3, height: 1.6),
+                         xRadius: 0.8, yRadius: 0.8).fill()
             ctx.setBlendMode(.normal)
             return true
         }
