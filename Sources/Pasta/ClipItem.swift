@@ -22,18 +22,12 @@ private enum ClipCaches {
         c.totalCostLimit = 64 * 1024 * 1024
         return c
     }()
-    static let pinyins: NSCache<NSUUID, NSArray> = {
-        let c = NSCache<NSUUID, NSArray>()
-        c.countLimit = 1200                      // [全拼, 首字母] 两个短串/条，覆盖满仓 1000 条
-        return c
-    }()
 
     static func purge(id: UUID) {
         let key = id as NSUUID
         thumbnails.removeObject(forKey: key)
         imageSizes.removeObject(forKey: key)
         imageBlobs.removeObject(forKey: key)
-        pinyins.removeObject(forKey: key)
     }
 }
 
@@ -46,15 +40,16 @@ struct ClipItem: Codable, Identifiable {
     }
 
     let id: UUID
-    var kind: Kind
-    var text: String?       // text 与 file 类型用（file 存换行分隔的路径）
+    var kind: Kind { didSet { searchIndex = ClipSearchIndex() } }
+    var text: String? { didSet { searchIndex = ClipSearchIndex() } } // file 存换行分隔的路径
     var rtfData: Data?      // text 类型的富文本版本（用于「保留格式」粘贴）
     var imageData: Data?    // image 类型的 PNG，仅运行时持有；持久化在独立文件（v2），不入 JSON
     var pinned: Bool
     var pinnedAt: Date?           // 收藏时间：常用页按它排序（位置稳定，不随重新复制扰动）
     var date: Date
     var sourceBundleID: String?   // 复制来源 App 的 bundle id（卡片右上角徽标用）
-    var ocrText: String?          // 图片的 OCR 识别文本（Vision 本地识别，仅参与搜索不参与显示）
+    var ocrText: String? { didSet { searchIndex = ClipSearchIndex() } } // 图片 OCR，仅参与搜索
+    private var searchIndex = ClipSearchIndex()
 
     init(kind: Kind, text: String? = nil, rtfData: Data? = nil, imageData: Data? = nil,
          pinned: Bool = false, sourceBundleID: String? = nil) {
@@ -82,11 +77,6 @@ struct ClipItem: Codable, Identifiable {
         self.date = date
         self.sourceBundleID = sourceBundleID
         self.ocrText = nil
-    }
-
-    /// OCR 完成后重建该条的拼音索引（searchText 变了，旧索引失效）。
-    static func purgeSearchIndex(id: UUID) {
-        ClipCaches.pinyins.removeObject(forKey: id as NSUUID)
     }
 
     // MARK: - Codable（imageData 不编码；解码保留以兼容 v1 内联格式的迁移）
@@ -183,27 +173,16 @@ struct ClipItem: Codable, Identifiable {
     }
 
     /// 拼音索引（全拼 + 首字母，均小写）：CFStringTransform 系统转换，零依赖。
-    /// 汉字逐字成音节（首字母逐字取），英文词原样保留。只取前 512 字符，按 id 缓存。
+    /// 汉字逐字成音节（首字母逐字取），英文词原样保留。只取前 512 字符，随记录缓存。
     /// 多音字取系统默认读音（如「长」固定 zhang 或 chang）——可接受的已知局限。
     var pinyinIndex: (full: String, initials: String) {
-        let key = id as NSUUID
-        if let cached = ClipCaches.pinyins.object(forKey: key) as? [String], cached.count == 2 {
-            return (cached[0], cached[1])
-        }
-        let m = NSMutableString(string: String(searchText.prefix(512)))
-        CFStringTransform(m, nil, kCFStringTransformMandarinLatin, false)
-        CFStringTransform(m, nil, kCFStringTransformStripDiacritics, false)
-        let words = (m as String).lowercased().split { !($0.isLetter || $0.isNumber) }
-        let full = words.joined()
-        let initials = words.compactMap { $0.first.map(String.init) }.joined()
-        ClipCaches.pinyins.setObject([full, initials] as NSArray, forKey: key)
-        return (full, initials)
+        searchIndex.pinyin(for: searchText)
     }
 
     /// 面板搜索匹配：原文子串命中；查询为纯 ASCII 字母数字时叠加拼音全拼/首字母匹配
     /// （「jtb」「jiantieban」都能找到「剪贴板」）。query 需已 lowercased。
     func matches(_ query: String) -> Bool {
-        if searchText.lowercased().contains(query) { return true }
+        if searchIndex.lowercased(searchText).contains(query) { return true }
         guard query.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return false }
         let py = pinyinIndex
         return py.full.contains(query) || py.initials.contains(query)
