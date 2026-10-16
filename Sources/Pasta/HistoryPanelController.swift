@@ -704,8 +704,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     /// 最近一次唤起时间：失活收面板的宽限期判定用。
     private var shownAt = Date.distantPast
-    /// 唤起后卡片建好前按下的 ⏎：暂存 plain 标记，卡片建好立即补执行（快手不落空）。
-    private var pendingQuickPaste: Bool?
+    /// 首屏或搜索尚未完成时的 ⏎/⌘数字：待最新卡片就绪后补执行。
+    private var pendingQuickPaste: PendingQuickPaste?
+    private let search = ClipSearch()
+    private var searchPending = false
     /// 面板不可见时产生的提示（大图被丢弃、权限已授予等），下次唤起时补显示。
     private var pendingNotice: (text: String, actionTitle: String?, action: (() -> Void)?, duration: TimeInterval)?
     /// ⌘ 角标当前是否在屏（flagsChanged 高频触发，只在翻转时重放 stagger）。
@@ -1143,13 +1145,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.isVisible else { return }
             self.refilter()
+            guard self.panel.isVisible else { return }   // 首屏补执行粘贴可能已隐藏面板
             self.updateFocusVisuals()
-            // 比卡片构建还快的 ⏎：现在卡片就绪，补执行那次粘贴
-            if let plain = self.pendingQuickPaste {
-                self.pendingQuickPaste = nil
-                self.pasteSelected(plain: plain)
-                return
-            }
             self.showDeferredNotices()
         }
     }
@@ -1181,6 +1178,8 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         preview.hide(animated: false)
         hideToast()
         removeKeyMonitor()
+        search.cancel()
+        searchPending = false
         pendingQuickPaste = nil
         panel.orderOut(nil)
     }
@@ -1320,6 +1319,10 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     /// ⌘1-9 直达：选中第 i 条并立即粘贴。
     private func pasteAt(_ i: Int) {
+        if searchPending {
+            pendingQuickPaste = .index(i, plain: Settings.shared.plainTextPaste)
+            return
+        }
         guard filtered.indices.contains(i) else { return }
         selectIndex(i)
         pasteSelected(plain: Settings.shared.plainTextPaste)
@@ -1329,7 +1332,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     /// 当前选中卡的上下文菜单（菜单动作与快捷键走同一批路径）。
     private func contextMenu() -> NSMenu? {
-        guard filtered.indices.contains(selectedIndex) else { return nil }
+        guard !searchPending, filtered.indices.contains(selectedIndex) else { return nil }
         let item = filtered[selectedIndex]
         let menu = NSMenu()
         // keyEquivalent 仅作展示教学（动作实际走键盘监视器），右键菜单是最好的快捷键教学面
@@ -1365,7 +1368,7 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     }
 
     private func selectIndex(_ i: Int) {
-        guard cardViews.indices.contains(i) else { return }
+        guard !searchPending, cardViews.indices.contains(i) else { return }
         let dir = i > selectedIndex ? 1 : (i < selectedIndex ? -1 : 0)   // 预览内容的方向暗示
         if cardViews.indices.contains(selectedIndex) { cardViews[selectedIndex].setSelected(false) }
         selectedIndex = i
@@ -1392,15 +1395,19 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
     /// 空格预览开关（选中项）。
     private func togglePreview() {
         if preview.isVisible { preview.hide(); return }
-        guard filtered.indices.contains(selectedIndex) else { return }
+        guard !searchPending, filtered.indices.contains(selectedIndex) else { return }
         preview.show(filtered[selectedIndex], above: panel)
     }
 
     private func pasteSelected(plain: Bool) {
+        if searchPending {
+            pendingQuickPaste = .selection(plain: plain)
+            return
+        }
         guard filtered.indices.contains(selectedIndex) else {
             // 唤起后卡片还没建好（快手 ⏎ 比下一拍的 refilter 还快）：暂存，建好立即补执行
             if !store.items.isEmpty, Date().timeIntervalSince(shownAt) < 1.0 {
-                pendingQuickPaste = plain
+                pendingQuickPaste = .selection(plain: plain)
             }
             return
         }
@@ -1429,18 +1436,18 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
 
     /// ⌘C：只写回剪贴板，不模拟粘贴、不关面板——拿到内容自己找地方粘的路径。
     private func copySelected() {
-        guard filtered.indices.contains(selectedIndex) else { return }
+        guard !searchPending, filtered.indices.contains(selectedIndex) else { return }
         onCopyOnly?(filtered[selectedIndex], Settings.shared.plainTextPaste)
         showToast("已复制", duration: 2)
     }
 
     private func togglePinSelected() {
-        guard filtered.indices.contains(selectedIndex) else { return }
+        guard !searchPending, filtered.indices.contains(selectedIndex) else { return }
         store.togglePin(id: filtered[selectedIndex].id)
     }
 
     private func deleteSelected() {
-        guard filtered.indices.contains(selectedIndex) else { return }
+        guard !searchPending, filtered.indices.contains(selectedIndex) else { return }
         store.delete(id: filtered[selectedIndex].id)
         showToast("已删除 · ⌘Z 撤销")
     }
@@ -1605,13 +1612,29 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         pendingSelectID = nil
 
         let q = searchField.stringValue.lowercased().trimmingCharacters(in: .whitespaces)
-        currentQuery = q
+        search.cancel()
+        if !preserveSelection && (searchPending || !q.isEmpty) { pendingQuickPaste = nil }
         // 常用页按收藏时间倒序：位置只随收藏/移出变化（⌘1-9 成为事实上的稳定槽位），
         // 重新复制某条常用不会把它顶到最前扰乱肌肉记忆；旧数据无收藏时间用剪贴时间兜底。
         let base = showPinnedOnly
             ? store.items.filter { $0.pinned }.sorted { ($0.pinnedAt ?? $0.date) > ($1.pinnedAt ?? $1.date) }
             : store.displayItems
-        filtered = q.isEmpty ? base : base.filter { $0.matches(q) }   // 子串 + 拼音全拼/首字母
+        if q.isEmpty {
+            applySearchResults(base, query: q, keepID: keepID, keepIndex: keepIndex)
+        } else {
+            searchPending = true
+            rebuildGeneration += 1   // 输入新查询后不再补建旧结果的离屏卡片
+            search.search(base, query: q) { [weak self] result in
+                self?.applySearchResults(result, query: q, keepID: keepID, keepIndex: keepIndex)
+            }
+        }
+    }
+
+    private func applySearchResults(_ result: [ClipItem], query q: String,
+                                    keepID: UUID?, keepIndex: Int) {
+        searchPending = false
+        currentQuery = q
+        filtered = result
 
         countLabel.stringValue = filtered.isEmpty ? ""
             : (filtered.count > Self.renderLimit
@@ -1634,6 +1657,15 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
         if preview.isVisible {   // 搜索/切标签后：预览跟随新选中项，无结果则收起
             if filtered.indices.contains(selectedIndex) { preview.show(filtered[selectedIndex], above: panel) }
             else { preview.hide() }
+        }
+        // 搜索后立刻回车/⌘数字：等待最新结果，不能粘贴仍在屏上的旧卡片。
+        if let pending = pendingQuickPaste {
+            pendingQuickPaste = nil
+            if let target = pending.resolve(selectedIndex: selectedIndex, resultCount: filtered.count),
+               cardViews.indices.contains(target.index) {
+                selectIndex(target.index)
+                pasteSelected(plain: target.plain)
+            }
         }
     }
 
@@ -1722,8 +1754,9 @@ final class HistoryPanelController: NSObject, NSTextFieldDelegate {
             self?.selectIndex(idx)
         }
         card.onActivate = { [weak self] in
-            self?.selectIndex(idx)
-            self?.pasteSelected(plain: Settings.shared.plainTextPaste)
+            guard let self, !self.searchPending else { return }
+            self.selectIndex(idx)
+            self.pasteSelected(plain: Settings.shared.plainTextPaste)
         }
         card.menuProvider = { [weak self] in self?.contextMenu() }
     }

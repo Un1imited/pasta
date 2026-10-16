@@ -9,6 +9,7 @@ let package = Package(
             name: "Pasta",
             path: "Sources/Pasta",
             linkerSettings: [.linkedLibrary("sqlite3")]
-        )
+        ),
+        .testTarget(name: "PastaTests", dependencies: ["Pasta"])
     ]
 )

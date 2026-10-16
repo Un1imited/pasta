@@ -53,7 +53,7 @@ final class ClipboardStore {
         sweepOrphanImages()
 
         // 后台预热：拼音索引（避免首次搜索卡一拍）+ 渲染区内图片的缩略图
-        // （避免首次唤起时面板边建卡边解码；NSCache 线程安全）
+        // （避免首次唤起时面板边建卡边解码；搜索索引和图片缓存均支持并发访问）
         let snapshot = items
         DispatchQueue.global(qos: .utility).async {
             snapshot.forEach { _ = $0.pinyinIndex }
@@ -86,7 +86,7 @@ final class ClipboardStore {
         pendingOCR.remove(id)
         guard let text else { return }
         if let idx = items.firstIndex(where: { $0.id == id }) { items[idx].ocrText = text }
-        ClipItem.purgeSearchIndex(id: id)   // searchText 变了，重建拼音索引
+        // ocrText 的 setter 会替换该记录的搜索索引，后台旧快照不受影响。
         dbQueue.async { [weak self] in self?.db?.updateOCR(id: id, text: text) }
         onChange?()
     }
